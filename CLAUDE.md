@@ -9,6 +9,8 @@ Read `PLAN.md` first: §0 tracks milestone progress, §11 logs deviations.
 - `npm run preview` — serve `dist/` (http://localhost:4173)
 - `npm test` — Vitest unit tests (pure logic, node env)
 - `npm run smoke` — build must exist; Playwright headless smoke test (screenshots in `scripts/out/`)
+  - `SMOKE_SCRIPT='js'` runs JS after load (then `_2.png` screenshot); `SMOKE_MOBILE=1` emulates a phone
+- `node scripts/shots.mjs "?quality=high" shots.json` — batch visual QA screenshots (`[{name, js, wait}]`)
 
 ## Conventions
 - TypeScript strict; no `any` unless interfacing with untyped browser APIs (comment why).

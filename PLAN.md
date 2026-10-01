@@ -12,7 +12,7 @@
 |-----------|--------|-------|
 | M0 Plan + scaffold + build pipeline | ✅ done | build/test/smoke pipeline green |
 | M1 Player controller, camera, touch controls, test area | ✅ done | `?test=1` sandbox: vault/climb/swim/cover verified via smoke |
-| M2 World streaming, districts, roads, lighting, day/night, weather | ⬜ todo | |
+| M2 World streaming, districts, roads, lighting, day/night, weather | ✅ done | ~120 draw calls downtown (High), 1 draw call per chunk via world shader |
 | M3 Vehicles: models, handling, damage, traffic AI | ⬜ todo | |
 | M4 Pedestrians + carjacking & theft | ⬜ todo | |
 | M5 Weapons, shooting, melee, ragdolls | ⬜ todo | |
@@ -392,5 +392,11 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
 
 ## 11. Deviations & Notes Log
 - (M0) Pinned TypeScript 5.9 / Vite 7 / Vitest 3 (newer majors available but less proven).
+- (M2) WATER_Y = −1 m (city ground at 0) to avoid z-fighting; Rapier heightfield uses the
+  anti-diagonal triangle split — `Terrain.sample` and chunk meshes match it (unit-tested).
+- (M2) Static world (terrain, roads, sidewalks, buildings) is merged into ONE mesh per 200 m
+  chunk using a patched standard material (procedural windows via `uvm`/`wparams`, `flat`
+  varyings to avoid hash flicker). Far terrain + skyline are single meshes whose vertices are
+  collapsed for loaded chunks via a 16×12 mask texture (no z-fighting with near chunks).
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.

@@ -27,8 +27,7 @@ async function boot(): Promise<void> {
     await progress(0.8, 'Building test area');
     game.setupTestArea();
   } else {
-    await progress(0.8, 'Building test area');
-    game.setupTestArea();
+    await game.setupWorld(progress);
   }
   await progress(1, 'Ready');
   game.start();

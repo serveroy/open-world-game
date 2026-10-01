@@ -16,6 +16,12 @@ import { Player } from '../player/Player';
 import { PlayerController } from './PlayerController';
 import { TestArea } from '../world/TestArea';
 import type { GameEvents } from './events';
+import { World } from '../world/World';
+import { Environment } from '../world/Environment';
+import { Water } from '../render/Water';
+import { Minimap, renderBaseMap } from '../ui/Minimap';
+import { SPAWNS } from '../world/MapData';
+import type { WeatherKind } from '../world/TimeOfDay';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -45,6 +51,13 @@ export class Game {
   readonly scene: THREE.Scene;
   quality: QualityLevel;
   test: TestArea | null = null;
+  world: World | null = null;
+  env: Environment | null = null;
+  water: Water | null = null;
+  minimap: Minimap | null = null;
+  baseMap: HTMLCanvasElement | null = null;
+  /** Streaming / simulation focus (player or cutscene camera). */
+  readonly focus = new THREE.Vector3();
   ready = false;
   paused = false;
   /** When true gameplay ignores player input (cutscenes, menus, mini-games). */
@@ -107,6 +120,48 @@ export class Game {
     this.test = new TestArea(this.scene, this.physics, this.renderer.preset.shadows);
     this.player.teleport(0, 0.05, 0, 0);
     this.cam.snapBehind(0);
+  }
+
+  /** Build the full open world (called during the loading screen). */
+  async setupWorld(progress: (p: number, msg: string) => Promise<void>): Promise<void> {
+    const pr = this.renderer.preset;
+    const low = this.quality === 'low';
+    let last = 0;
+    const tick = (p: number, msg: string): void => {
+      // world construction is synchronous; we only update the bar text when it moves a lot
+      if (p - last > 0.05) {
+        last = p;
+        void progress(0.3 + p * 0.55, msg);
+      }
+    };
+    await progress(0.32, 'Shaping terrain');
+    this.world = new World(this.scene, this.physics, params.seed, { radius: pr.viewRadiusChunks, low, shadows: pr.shadows && this.settings.data.shadows }, tick);
+    await progress(0.86, 'Filling the sea');
+    this.water = new Water(this.scene, (x, z) => this.world!.terrain.sample(x, z));
+    this.env = new Environment(this.scene, this.renderer.camera, pr.shadows && this.settings.data.shadows, pr.shadowMapSize, !low, this.water, this.settings.data.dayLengthMinutes);
+    if (params.time !== null) this.env.clock.setHour(params.time);
+    if (params.weather) this.env.setWeather(params.weather as WeatherKind, true);
+    await progress(0.9, 'Drawing maps');
+    this.baseMap = renderBaseMap(this.world.data);
+    this.minimap = new Minimap(this.hud.minimapWrap, this.baseMap);
+    this.world.onDistrict = (_id, name) => this.hud.zone(name);
+    const sp = SPAWNS.start;
+    const y = this.world.groundY(sp.x, sp.z);
+    this.player.teleport(sp.x, Math.max(y, 0.2) + 0.1, sp.z, sp.yaw);
+    this.cam.snapBehind(sp.yaw);
+    await progress(0.93, 'Streaming Port Solano');
+    this.world.loadAround(sp.x, sp.z);
+    this.settings.onChange((s) => {
+      if (this.env) this.env.clock.dayLengthMinutes = s.dayLengthMinutes;
+    });
+  }
+
+  /** Teleport player and stream the destination synchronously. */
+  teleport(x: number, z: number, yaw = this.player.yaw, y?: number): void {
+    this.world?.loadAround(x, z);
+    const gy = y ?? Math.max(this.world ? this.world.groundY(x, z) : 0, 0) + 0.3;
+    this.player.teleport(x, gy, z, yaw);
+    this.cam.snapBehind(yaw);
   }
 
   addSystem(s: System): void {
@@ -187,6 +242,14 @@ export class Game {
     }
     for (const s of this.systems) s.lateUpdate?.(dt);
     this.test?.update(p.renderPos);
+    if (this.world && this.env) {
+      if (p.mode !== 'scripted' || this.cam.mode !== 'cutscene') this.focus.copy(p.renderPos);
+      this.world.update(dt, this.focus, this.env.night);
+      this.env.update(dt, this.focus, this.renderer.gl);
+      this.water?.update(this.renderer.camera, this.time);
+      this.minimap?.draw(dt, p.renderPos.x, p.renderPos.z, this.cam.yaw, p.yaw, Math.hypot(p.vel.x, p.vel.z));
+      this.hud.clockText(this.env.clock.text());
+    }
     this.chars.commit();
     this.hud.vitals(p.vitals.health, p.vitals.maxHealth, p.vitals.armor, p.vitals.stamina, p.swimming ? p.vitals.breath : null);
     this.hud.setUnderwater(this.cam.underwater);
@@ -206,7 +269,8 @@ export class Game {
     const p = this.player.pos;
     return `FPS ${this.fps.toFixed(0)}  ${this.quality.toUpperCase()}  res×${this.renderer.resolutionScale.toFixed(2)} pr ${this.renderer.pixelRatio.toFixed(2)}\n` +
       `draws ${info.render.calls}  tris ${(info.render.triangles / 1000).toFixed(0)}k  geo ${info.memory.geometries} tex ${info.memory.textures}\n` +
-      `pos ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}  ${this.player.mode}${this.player.swimming ? ' swim' : ''}${this.player.grounded ? ' gnd' : ''}`;
+      `pos ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}  ${this.player.mode}${this.player.swimming ? ' swim' : ''}${this.player.grounded ? ' gnd' : ''}\n` +
+      `chunks ${this.world?.chunkCount ?? 0}  ${this.env ? this.env.clock.text() + ' ' + this.env.weather.target : ''}`;
   }
 
   stats(): Record<string, number | string> {
@@ -222,6 +286,8 @@ export class Game {
       y: +this.player.pos.y.toFixed(1),
       z: +this.player.pos.z.toFixed(1),
       mode: this.player.mode,
+      chunks: this.world?.chunkCount ?? 0,
+      time: this.env?.clock.text() ?? '',
     };
   }
 }

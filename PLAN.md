@@ -13,7 +13,7 @@
 | M0 Plan + scaffold + build pipeline | ✅ done | build/test/smoke pipeline green |
 | M1 Player controller, camera, touch controls, test area | ✅ done | `?test=1` sandbox: vault/climb/swim/cover verified via smoke |
 | M2 World streaming, districts, roads, lighting, day/night, weather | ✅ done | ~120 draw calls downtown (High), 1 draw call per chunk via world shader |
-| M3 Vehicles: models, handling, damage, traffic AI | ⬜ todo | |
+| M3 Vehicles: models, handling, damage, traffic AI | ✅ done | 18 procedural vehicles; handling + traffic AI unit-tested headless; radio & engine audio in M9 |
 | M4 Pedestrians + carjacking & theft | ✅ done | instanced peds with routines & reactions; carjack, smash, lockpick mini-game, alarms, hot cars |
 | M5 Weapons, shooting, melee, ragdolls | ⬜ todo | |
 | M6 Police & wanted system | ⬜ todo | |

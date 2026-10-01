@@ -205,6 +205,11 @@ export class SfxBank {
   private howl(name: string, spatial: boolean): Howl | null {
     const map = spatial ? this.spatial : this.flat;
     let h = map.get(name);
+    // Howler.unload() (context replaced) leaves dead Howls behind: recreate them
+    if (h && h.state() === 'unloaded') {
+      map.delete(name);
+      h = undefined;
+    }
     if (!h) {
       const uri = this.uris.get(name);
       if (!uri) return null;

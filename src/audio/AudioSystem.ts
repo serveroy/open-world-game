@@ -193,15 +193,19 @@ export class AudioSystem implements System {
   private silentEl: HTMLAudioElement | null = null;
   private babbleUntil = 0;
   private wakeT = 0;
+  private sfxBuilding = false;
+  private volHooked = false;
 
   constructor(private game: Game) {
     this.station = game.settings.data.radioStation >= 3 ? -1 : game.settings.data.radioStation;
     // capture phase: UI buttons stop propagation, but every tap must be able to unlock audio
     const unlock = (): void => {
       this.init();
+      this.checkContext();
       this.iosPlayback();
       this.voice.prime();
       if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume().catch(() => undefined);
+      this.kick();
     };
     for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) addEventListener(ev, unlock, { capture: true, passive: true });
     game.hud.onSubtitle = (who, text, secs) => this.say(who, text, secs);
@@ -226,6 +230,10 @@ export class AudioSystem implements System {
       // Howler suspends its AudioContext 30 s after the last *Howl* stops — but our radio,
       // engines and ambience are live Web Audio graphs on that same context, so it must stay up.
       Howler.autoSuspend = false;
+      // Howler's auto-unlock closes and recreates the AudioContext when its sample rate isn't
+      // 44.1 kHz (iPhones and most Androids run at 48 kHz). That silently kills every live graph
+      // we built on the old context (radio, engines, ambience). We unlock on gestures ourselves.
+      Howler.autoUnlock = false;
       Howler.volume(s.masterVolume);
     } catch {
       return;
@@ -283,12 +291,55 @@ export class AudioSystem implements System {
       this.voice.speak(lines[Math.floor(Math.random() * lines.length)]!, dj, g.settings.data.masterVolume * g.settings.data.musicVolume);
       g.hud.radio(`${name} · DJ`);
     };
-    void this.sfx.build();
-    this.game.settings.onChange((st) => {
-      Howler.volume(st.masterVolume);
-      this.sfxBus.gain.setTargetAtTime(st.sfxVolume, ctx.currentTime, 0.05);
-      this.musicBus.gain.setTargetAtTime(st.musicVolume, ctx.currentTime, 0.05);
-    });
+    if (!this.sfx.ready && !this.sfxBuilding) {
+      this.sfxBuilding = true;
+      void this.sfx.build();
+    }
+    if (!this.volHooked) {
+      this.volHooked = true;
+      this.game.settings.onChange((st) => {
+        Howler.volume(st.masterVolume);
+        const c = this.ctx;
+        if (!c || !this.started) return;
+        this.sfxBus.gain.setTargetAtTime(st.sfxVolume, c.currentTime, 0.05);
+        this.musicBus.gain.setTargetAtTime(st.musicVolume, c.currentTime, 0.05);
+      });
+    }
+  }
+
+  /** iOS: a gesture must start *something* on the context before it will produce sound. */
+  private kick(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Safety net: if anything replaced or closed the shared AudioContext, rebuild all live graphs
+   * (radio, engines, sirens, ambience) on Howler's current context.
+   */
+  private checkContext(): void {
+    const cur = (Howler as unknown as { ctx: AudioContext | null }).ctx;
+    if (!this.started || (cur === this.ctx && this.ctx?.state !== 'closed')) return;
+    const station = this.radio?.current ? this.station : this.station;
+    this.radio?.tune(-1);
+    this.started = false;
+    this.ctx = null;
+    this.radio = null;
+    this.ai = [];
+    this.sirens = [];
+    this.horns = [];
+    this.amb = {} as never;
+    if (cur?.state === 'closed') (Howler as unknown as { ctx: AudioContext | null }).ctx = null;
+    this.init();
+    this.station = station;
   }
 
   /**
@@ -473,6 +524,7 @@ export class AudioSystem implements System {
   }
 
   update(dt: number): void {
+    this.checkContext();
     if (!this.started || !this.ctx) return;
     const g = this.game;
     const ctx = this.ctx;

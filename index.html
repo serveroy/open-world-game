@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#c8283c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Crimson Coast — an original open-world action-crime game that runs in your browser." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <title>Crimson Coast</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0710; overflow: hidden; }
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(ellipse at 50% 30%, #ff6a3c 0%, #a3204a 35%, #2a0b2e 70%, #0b0710 100%);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #fff; z-index: 1000; transition: opacity .6s; }
+      #boot h1 { font-size: clamp(32px, 7vw, 72px); letter-spacing: .12em; margin: 0; font-weight: 900; font-style: italic;
+        text-shadow: 0 4px 0 #6b0f2e, 0 0 30px rgba(255,120,80,.6); }
+      #boot .sub { opacity: .8; letter-spacing: .4em; font-size: 12px; margin-top: 6px; }
+      #boot .bar { width: min(420px, 70vw); height: 6px; background: rgba(255,255,255,.15); border-radius: 3px; margin-top: 36px; overflow: hidden; }
+      #boot .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #ffd250, #ff5a3c); transition: width .25s; }
+      #boot .tip { margin-top: 18px; max-width: 70vw; text-align: center; font-size: 14px; opacity: .85; min-height: 2.4em; }
+      #boot .status { margin-top: 8px; font-size: 11px; opacity: .55; letter-spacing: .1em; }
+    </style>
+  </head>
+  <body>
+    <div id="boot">
+      <h1>CRIMSON COAST</h1>
+      <div class="sub">PORT SOLANO · SAL MESA · CORAL KEYS</div>
+      <div class="bar"><div id="boot-bar"></div></div>
+      <div class="tip" id="boot-tip"></div>
+      <div class="status" id="boot-status">LOADING</div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

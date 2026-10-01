@@ -1,0 +1,18 @@
+export const TIPS: string[] = [
+  'Tap ENTER near any car to steal it. Occupied cars mean pulling the driver out.',
+  'Break line of sight with the police to start a search. Stay hidden until the stars stop flashing.',
+  "Reyes' Body & Paint in Rustvale resprays hot cars and clears your wanted level — if nobody sees you go in.",
+  'Hold the weapon wheel button and slide to pick a weapon.',
+  'Swipe across the screen while aiming to switch lock-on targets.',
+  'Sprint into low walls to vault over them automatically.',
+  'Armor absorbs most incoming damage. Buy more at Iron & Ember in Midtown.',
+  'Businesses you own pay out every in-game day. Collect at the property.',
+  'Sandstorms roll across Sal Mesa — headlights help, and so does slowing down.',
+  'Police helicopters can see you from far away. Hide under bridges or in tunnels.',
+  'Parked cars can be lockpicked quietly or smashed open quickly — but alarms attract attention.',
+  'Your phone has a map with GPS. Set a waypoint and follow the route on the minimap.',
+  'Resprayed cars are no longer reported stolen.',
+  'Wasted? The hospital patches you up for a fee. Busted? You lose some cash and your guns.',
+  'Customize HUD button size and layout in Settings → Controls.',
+  'Thirty Saint Shells are hidden around the coast. Find them all for a reward.',
+];

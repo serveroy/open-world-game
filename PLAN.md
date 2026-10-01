@@ -11,7 +11,7 @@
 | Milestone | Status | Notes |
 |-----------|--------|-------|
 | M0 Plan + scaffold + build pipeline | ✅ done | build/test/smoke pipeline green |
-| M1 Player controller, camera, touch controls, test area | ⬜ todo | |
+| M1 Player controller, camera, touch controls, test area | ✅ done | `?test=1` sandbox: vault/climb/swim/cover verified via smoke |
 | M2 World streaming, districts, roads, lighting, day/night, weather | ⬜ todo | |
 | M3 Vehicles: models, handling, damage, traffic AI | ⬜ todo | |
 | M4 Pedestrians + carjacking & theft | ⬜ todo | |

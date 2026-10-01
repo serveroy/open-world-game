@@ -8,6 +8,25 @@ import { STAT_LABELS } from '../game/PlayerStats';
 import { formatMoney } from '../core/math';
 import { DeliveryJob } from '../activities/Jobs';
 
+/** Map key: what each landmark icon means and what you do there. */
+const LEGEND: Partial<Record<import('../world/MapData').LandmarkKind, [string, string]>> = {
+  safehouse: ['Safehouse', 'Sleep, save, garage (grey = not yours yet)'],
+  business: ['Business', 'Buy it, then collect daily income'],
+  gunshop: ['Gun shop', 'Weapons, ammo, armor'],
+  modshop: ['Mod shop', 'Drive in: engine, brakes, paint…'],
+  respray: ['Respray', 'Drive in to lose the cops'],
+  barber: ['Barber', 'Hair, beard, colour'],
+  clothes: ['Clothing', 'Outfits'],
+  tattoo: ['Tattoos', 'Ink'],
+  club: ['Nightclub', 'Open 20:00–05:00'],
+  hospital: ['Hospital', 'You wake up here when wasted'],
+  police: ['Police HQ', 'You leave here when busted'],
+  gas: ['Gas station', ''],
+  boatrental: ['Boats', 'Marina boats'],
+  helipad: ['Helipad', 'Helicopter on the roof'],
+  diner: ['Diner', 'Desert stop'],
+};
+
 type App = 'home' | 'map' | 'missions' | 'contacts' | 'stats' | 'property' | 'call';
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -143,6 +162,30 @@ export class Phone {
       case 'center':
         this.centerOnPlayer();
         break;
+      case 'legend': {
+        const el = this.screen.querySelector('.map-legend');
+        el?.classList.toggle('open');
+        break;
+      }
+      case 'findkind': {
+        // jump the map to the nearest place of that kind
+        const p = this.game.vctrl?.vehicle?.position ?? this.game.player.pos;
+        let best: { x: number; z: number } | null = null, bd = Infinity;
+        for (const l of LANDMARKS) if (l.kind === d.kind) {
+          const dd = Math.hypot(l.x - p.x, l.z - p.z);
+          if (dd < bd) {
+            bd = dd;
+            best = l;
+          }
+        }
+        if (best) {
+          this.cx = best.x;
+          this.cz = best.z;
+          this.zoom = Math.max(this.zoom, 2);
+        }
+        this.screen.querySelector('.map-legend')?.classList.remove('open');
+        break;
+      }
       case 'zoom':
         this.zoom = Math.min(4, Math.max(0.35, this.zoom * Number(d.f)));
         break;
@@ -163,6 +206,16 @@ export class Phone {
         break;
       }
     }
+  }
+
+  private legendHtml(): string {
+    const rows = (Object.keys(LEGEND) as (keyof typeof LEGEND)[]).filter((k) => LANDMARK_ICONS[k]).map((k) => {
+      const ic = LANDMARK_ICONS[k]!;
+      return `<button class="lg" data-a="findkind" data-kind="${k}"><i style="color:${ic.color}">${ic.label}</i><span><b>${LEGEND[k]![0]}</b>${LEGEND[k]![1]}</span></button>`;
+    });
+    const extra = [['#ff4d8a', '●', 'Story mission', 'Pink letter = who gives it'], ['#ff4d8a', '🏁', 'Street race', 'Drive in to start'], ['#ff2a2a', '☠', 'Rampage', 'Walk into the skull'], ['#ffd250', '📦', 'Courier job', 'Gull Express depot'], ['#c07dff', '◆', 'Your waypoint', 'Tap the map to set']]
+      .map(([c, i, t, s]) => `<div class="lg"><i style="color:${c}">${i}</i><span><b>${t}</b>${s}</span></div>`);
+    return `<div class="map-legend">${[...rows, ...extra].join('')}</div>`;
   }
 
   private centerOnPlayer(): void {
@@ -295,8 +348,8 @@ export class Phone {
   private renderMap(): void {
     const g = this.game;
     this.screen.innerHTML = `<div class="mapview"><canvas></canvas>
-      <div class="map-tools"><button class="btn small" data-a="zoom" data-f="1.4">＋</button><button class="btn small" data-a="zoom" data-f="0.7">－</button><button class="btn small" data-a="center">◎</button>${g.gps.waypoint ? '<button class="btn small" data-a="clearwp">✕ WP</button>' : ''}</div>
-      <div class="map-hint muted">Tap to set a waypoint</div></div>`;
+      <div class="map-tools"><button class="btn small" data-a="zoom" data-f="1.4">＋</button><button class="btn small" data-a="zoom" data-f="0.7">－</button><button class="btn small" data-a="center">◎</button><button class="btn small" data-a="legend">Key</button>${g.gps.waypoint ? '<button class="btn small" data-a="clearwp">✕ WP</button>' : ''}</div>
+      <div class="map-hint muted">Tap to set a waypoint · Key explains the icons</div>${this.legendHtml()}</div>`;
     const c = this.screen.querySelector('canvas')!;
     this.canvas = c;
     if (!this.cx && !this.cz) this.centerOnPlayer();
@@ -361,7 +414,7 @@ export class Phone {
     else this.game.gps.setWaypoint({ x, z });
     this.game.haptic(10);
     const tools = this.screen.querySelector('.map-tools');
-    if (tools) tools.innerHTML = `<button class="btn small" data-a="zoom" data-f="1.4">＋</button><button class="btn small" data-a="zoom" data-f="0.7">－</button><button class="btn small" data-a="center">◎</button>${this.game.gps.waypoint ? '<button class="btn small" data-a="clearwp">✕ WP</button>' : ''}`;
+    if (tools) tools.innerHTML = `<button class="btn small" data-a="zoom" data-f="1.4">＋</button><button class="btn small" data-a="zoom" data-f="0.7">－</button><button class="btn small" data-a="center">◎</button><button class="btn small" data-a="legend">Key</button>${this.game.gps.waypoint ? '<button class="btn small" data-a="clearwp">✕ WP</button>' : ''}`;
   };
 
   private drawMap(): void {

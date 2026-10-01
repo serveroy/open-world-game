@@ -10,7 +10,8 @@ Read `PLAN.md` first: §0 tracks milestone progress, §11 logs deviations.
 - `npm test` — Vitest unit tests (pure logic, node env)
 - `npm run smoke` — build must exist; Playwright headless smoke test (screenshots in `scripts/out/`)
   - `SMOKE_SCRIPT='js'` runs JS after load (then `_2.png` screenshot); `SMOKE_MOBILE=1` emulates a phone
-- `node scripts/shots.mjs "?quality=high" shots.json` — batch visual QA screenshots (`[{name, js, wait}]`)
+- `node scripts/shots.mjs "?quality=high" shots.json` — batch visual QA screenshots (`[{name, js, wait}]`); `SMOKE_MOBILE=1 SHOT_W=572 SHOT_H=307 SHOT_DPR=3` + `?framed=1` emulates a phone inside the Claude app viewer
+- `node scripts/render-radio.mjs <dir>` — render the three radio stations to WAV (needs a build)
 
 ## Conventions
 - TypeScript strict; no `any` unless interfacing with untyped browser APIs (comment why).

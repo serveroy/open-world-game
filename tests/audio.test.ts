@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATIONS, chordOn, makeSong, midiToFreq, scaleNotes, stepTime } from '../src/audio/music';
+import { STATIONS, chordOn, makeSong, midiToFreq, scaleNotes, sectionAt, stepTime } from '../src/audio/music';
 import { encodeWav, normalize } from '../src/audio/wav';
 
 describe('procedural music', () => {
@@ -29,6 +29,37 @@ describe('procedural music', () => {
       // lead stays in a singable range
       for (const n of a.lead) if (n !== null) expect(n).toBeGreaterThan(40), expect(n).toBeLessThan(110);
     }
+  });
+
+  it('songs have a real form: intro, verse/chorus alternation, outro', () => {
+    for (const st of STATIONS) {
+      for (let seed = 1; seed < 20; seed++) {
+        const s = makeSong(st, seed);
+        const kinds = s.sections.map((x) => x.kind);
+        expect(kinds[0]).toBe('intro');
+        expect(kinds[kinds.length - 1]).toBe('outro');
+        expect(kinds.filter((k) => k === 'chorus').length).toBeGreaterThanOrEqual(3);
+        expect(s.bars).toBe(s.sections.reduce((a, x) => a + x.bars, 0));
+        expect(s.artist.length).toBeGreaterThan(3);
+        // chorus uses a different progression than the verse
+        const verse = s.sections.find((x) => x.kind === 'verse')!, chorus = s.sections.find((x) => x.kind === 'chorus')!;
+        expect(verse.prog).not.toEqual(chorus.prog);
+        // the sung hook stays in a human vocal range
+        const notes = s.hook.filter((n): n is number => n !== null);
+        expect(notes.length).toBeGreaterThanOrEqual(8);
+        for (const n of notes) {
+          expect(n).toBeGreaterThanOrEqual(s.vocalFemale ? 60 : 48);
+          expect(n).toBeLessThanOrEqual(s.vocalFemale ? 86 : 74);
+        }
+      }
+    }
+  });
+
+  it('finds the section for a bar', () => {
+    const s = makeSong(STATIONS[0]!, 5);
+    expect(sectionAt(s, 0).section.kind).toBe('intro');
+    expect(sectionAt(s, 4)).toEqual({ section: s.sections[1], barInSection: 0 });
+    expect(sectionAt(s, 9999).section.kind).toBe('outro');
   });
 
   it('applies swing to off-beats only', () => {

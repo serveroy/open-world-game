@@ -249,6 +249,11 @@ export class Hud {
   /** Called for every subtitle line (audio voices it). */
   onSubtitle: ((who: string | null, text: string | null, seconds: number) => void) | null = null;
 
+  /** A subtitle line is on screen (story dialogue in progress). */
+  subtitleBusy(): boolean {
+    return this.subTimer > 0;
+  }
+
   /** Keep the current subtitle up a little longer (while the line is still being spoken). */
   extendSubtitle(seconds: number): void {
     if (this.subTimer > 0) this.subTimer = Math.max(this.subTimer, seconds);

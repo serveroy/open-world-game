@@ -50,6 +50,7 @@ import { SaveManager } from './SaveManager';
 import { Phone } from '../ui/Phone';
 import { SettingsUI } from '../ui/SettingsUI';
 import { Menus } from '../ui/Menus';
+import { buildSigns } from '../world/Signs';
 import { AudioSystem } from '../audio/AudioSystem';
 import { PostFX } from '../render/PostFX';
 
@@ -238,6 +239,8 @@ export class Game {
     await progress(0.32, 'Shaping terrain');
     this.world = new World(this.scene, this.physics, params.seed, { radius: pr.viewRadiusChunks, low, shadows: pr.shadows && this.settings.data.shadows }, tick);
     await progress(0.86, 'Filling the sea');
+    const signs = buildSigns(this.world.data);
+    if (signs) this.scene.add(signs);
     this.water = new Water(this.scene, (x, z) => this.world!.terrain.sample(x, z));
     this.env = new Environment(this.scene, this.renderer.camera, pr.shadows && this.settings.data.shadows, pr.shadowMapSize, !low, this.water, this.settings.data.dayLengthMinutes);
     if (params.time !== null) this.env.clock.setHour(params.time);

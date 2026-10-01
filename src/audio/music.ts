@@ -55,8 +55,20 @@ const PROGRESSIONS: Record<StationId, number[][]> = {
   lowtide: [[1, 4, 0, 5], [0, 3, 1, 4], [3, 4, 2, 5], [1, 4, 2, 5]],
 };
 
+export type SectionKind = 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro';
+
+export interface Section {
+  kind: SectionKind;
+  bars: number;
+  /** Chord degrees cycled one per bar. */
+  prog: number[];
+  /** 0..1 arrangement density (which instruments play). */
+  energy: number;
+}
+
 export interface Song {
   title: string;
+  artist: string;
   station: StationId;
   bpm: number;
   swing: number;
@@ -72,8 +84,65 @@ export interface Song {
   bass: (number | null)[];
   /** Lead melody over 4 bars (64 16ths): MIDI note or null. */
   lead: (number | null)[];
-  /** Bars before the song changes. */
+  /** Bars before the song changes (sum of section bars). */
   bars: number;
+  /** Song form: intro, verses, choruses, bridge, outro. */
+  sections: Section[];
+  /** Chorus "vocal" hook over 2 bars (32 16ths), MIDI or null; sung on vowels. */
+  hook: (number | null)[];
+  vocalFemale: boolean;
+}
+
+const ARTIST_A = ['The', 'DJ', 'Lady', 'Johnny', 'Marisol', 'Static', 'Midnight', 'Coastal', 'Velvet', 'Rio', 'Neon', 'Desert'];
+const ARTIST_B = ['Saints', 'Kestrel', 'Hollow Pines', 'Riptide', 'Cassette', 'Mirage', 'Vela', 'Dune Riders', 'Low Fidelity', 'Palms', 'Avenues', 'Gold Coast'];
+
+export function artistName(rng: Rng): string {
+  return `${rng.pick(ARTIST_A)} ${rng.pick(ARTIST_B)}`;
+}
+
+/** Standard pop form; section lengths in bars. */
+export function songForm(rng: Rng, verse: number[], chorus: number[]): Section[] {
+  const bridge = [verse[2] ?? 3, verse[3] ?? 4, chorus[0] ?? 0, chorus[3] ?? 4];
+  const s: Section[] = [
+    { kind: 'intro', bars: 4, prog: chorus, energy: 0.25 },
+    { kind: 'verse', bars: 8, prog: verse, energy: 0.6 },
+    { kind: 'chorus', bars: 8, prog: chorus, energy: 1 },
+    { kind: 'verse', bars: 8, prog: verse, energy: 0.65 },
+    { kind: 'chorus', bars: 8, prog: chorus, energy: 1 },
+  ];
+  if (rng.chance(0.75)) s.push({ kind: 'bridge', bars: 4, prog: bridge, energy: 0.35 });
+  s.push({ kind: 'chorus', bars: 8, prog: chorus, energy: 1 }, { kind: 'outro', bars: 4, prog: chorus, energy: 0.3 });
+  return s;
+}
+
+/** Section active at a bar index (clamped to the last section). */
+export function sectionAt(song: Pick<Song, 'sections'>, bar: number): { section: Section; barInSection: number } {
+  let b = bar;
+  for (const sec of song.sections) {
+    if (b < sec.bars) return { section: sec, barInSection: b };
+    b -= sec.bars;
+  }
+  const last = song.sections[song.sections.length - 1]!;
+  return { section: last, barInSection: last.bars - 1 };
+}
+
+/** A singable 2-bar chorus hook: stepwise, on chord tones on strong beats, ends on the tonic. */
+function hookLine(rng: Rng, root: number, mode: StationDef['mode']): (number | null)[] {
+  const sc = scaleNotes(root, mode, 2);
+  const out: (number | null)[] = new Array(32).fill(null);
+  const rhythm = rng.pick([
+    [0, 3, 6, 8, 10, 12, 16, 19, 22, 24, 26],
+    [0, 2, 4, 6, 8, 12, 16, 18, 20, 22, 24],
+    [0, 4, 6, 8, 12, 14, 16, 20, 22, 24, 28],
+  ]);
+  let idx = rng.int(4, 7);
+  for (const step of rhythm) {
+    if (step % 8 === 0) idx = [4, 6, 7, 9][rng.int(0, 3)]!; // chord tones on the beat
+    else idx = Math.max(2, Math.min(9, idx + rng.pick([-1, -1, 1, 1, 2, -2])));
+    out[step] = sc[idx]!;
+  }
+  out[rhythm[rhythm.length - 1]!] = sc[7]!; // resolve to the octave tonic
+  return out;
 }
 
 const WORDS_A = ['Midnight', 'Neon', 'Coastal', 'Velvet', 'Crimson', 'Silver', 'Desert', 'Lonely', 'Electric', 'Salt', 'Paper', 'Golden', 'Broken', 'Highway', 'Harbor'];
@@ -151,10 +220,15 @@ function melody(rng: Rng, notes: number[], st: StationId): (number | null)[] {
 export function makeSong(station: StationDef, seed: number): Song {
   const rng = new Rng(seed);
   const root = rng.int(station.rootRange[0], station.rootRange[1]);
-  const prog = rng.pick(PROGRESSIONS[station.id]);
+  const progs = PROGRESSIONS[station.id];
+  const prog = rng.pick(progs);
+  const chorusProg = progs[(progs.indexOf(prog) + 1 + rng.int(0, progs.length - 2)) % progs.length]!;
   const d = drums(rng, station.id);
+  const sections = songForm(rng, prog, chorusProg);
+  const vocalFemale = rng.chance(0.55);
   return {
     title: songTitle(rng),
+    artist: artistName(rng),
     station: station.id,
     bpm: rng.int(station.bpm[0], station.bpm[1]),
     swing: station.swing,
@@ -164,7 +238,10 @@ export function makeSong(station: StationDef, seed: number): Song {
     ...d,
     bass: bassLine(rng, station.id),
     lead: melody(rng, scaleNotes(root + 24, station.mode, 2), station.id),
-    bars: rng.pick([24, 32, 32, 40]),
+    sections,
+    bars: sections.reduce((a, s) => a + s.bars, 0),
+    hook: hookLine(rng, root + (vocalFemale ? 24 : 12), station.mode),
+    vocalFemale,
   };
 }
 

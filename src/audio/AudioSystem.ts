@@ -192,6 +192,7 @@ export class AudioSystem implements System {
   readonly voice = new SpeechVoice();
   private silentEl: HTMLAudioElement | null = null;
   private babbleUntil = 0;
+  private wakeT = 0;
 
   constructor(private game: Game) {
     this.station = game.settings.data.radioStation >= 3 ? -1 : game.settings.data.radioStation;
@@ -222,6 +223,9 @@ export class AudioSystem implements System {
     if (this.started) return;
     const s = this.game.settings.data;
     try {
+      // Howler suspends its AudioContext 30 s after the last *Howl* stops — but our radio,
+      // engines and ambience are live Web Audio graphs on that same context, so it must stay up.
+      Howler.autoSuspend = false;
       Howler.volume(s.masterVolume);
     } catch {
       return;
@@ -262,7 +266,22 @@ export class AudioSystem implements System {
     }
     this.radio = new Radio(ctx, this.musicBus);
     this.radio.onSongChange = (st, song) => {
-      if (this.game.vctrl?.inVehicle && !this.inClub) this.game.hud.radio(`${st.name} · “${song.title}”`);
+      if (this.game.vctrl?.inVehicle && !this.inClub) this.game.hud.radio(`${st.name} · ${song.artist} — “${song.title}”`);
+    };
+    this.radio.onBreak = (st, prev, next) => {
+      const g = this.game;
+      if (!g.vctrl?.inVehicle || this.inClub || g.settings.data.voice !== 'speech' || this.voice.speaking) return;
+      if (g.hud.subtitleBusy()) return; // never talk over story dialogue
+      const name = st.name.replace(/\s[\d.]+$/, '');
+      const freq = st.name.match(/[\d.]+$/)?.[0] ?? '';
+      const lines = [
+        `That was ${prev.artist} with ${prev.title}. You're on ${name}, ${freq}. Here's ${next.title} by ${next.artist}.`,
+        `${name}, ${freq}. Up next, ${next.artist}. This one's called ${next.title}.`,
+        `${prev.title}, from ${prev.artist}. Stay locked to ${name}. Here comes ${next.artist}.`,
+      ];
+      const dj = { female: st.id === 'lowtide', seed: st.id === 'neon' ? 0.15 : st.id === 'dust' ? 0.85 : 0.5 };
+      this.voice.speak(lines[Math.floor(Math.random() * lines.length)]!, dj, g.settings.data.masterVolume * g.settings.data.musicVolume);
+      g.hud.radio(`${name} · DJ`);
     };
     void this.sfx.build();
     this.game.settings.onChange((st) => {
@@ -457,6 +476,12 @@ export class AudioSystem implements System {
     if (!this.started || !this.ctx) return;
     const g = this.game;
     const ctx = this.ctx;
+    // watchdog: phones suspend/interrupt audio (calls, Siri, app switch); resume once visible
+    this.wakeT -= dt;
+    if (this.wakeT <= 0 && ctx.state !== 'running' && !document.hidden) {
+      this.wakeT = 1.5;
+      void ctx.resume().catch(() => undefined);
+    }
     const t = ctx.currentTime;
     this.t += dt;
     this.cashT -= dt;
@@ -611,14 +636,15 @@ export class AudioSystem implements System {
       this.station = this.station >= STATIONS.length - 1 ? -1 : this.station + 1;
       if (this.station === -1) g.hud.radio('RADIO OFF');
       r.tune(this.station);
-      if (this.station >= 0) g.hud.radio(`${STATIONS[this.station]!.name} · “${r.songTitle}”`);
+      if (this.station >= 0) g.hud.radio(`${STATIONS[this.station]!.name} · ${r.songArtist} — “${r.songTitle}”`);
     }
     if (inVeh && this.station >= 0) {
       if (!r.current) {
         r.tune(this.station);
-        g.hud.radio(`${STATIONS[this.station]!.name} · “${r.songTitle}”`);
+        g.hud.radio(`${STATIONS[this.station]!.name} · ${r.songArtist} — “${r.songTitle}”`);
       }
-      r.setLevel(paused ? 0.25 : 0.55, 0);
+      // duck under the DJ or story dialogue
+      r.setLevel((paused ? 0.3 : 0.85) * (this.speaking ? 0.45 : 1), 0);
     } else if (r.current) {
       // keep the music going briefly when stepping out, muffled, then stop
       r.setLevel(0, 0.8);

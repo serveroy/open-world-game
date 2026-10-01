@@ -228,6 +228,11 @@ export class Hud {
     this.helpTimer = seconds;
   }
 
+  /** Hide the help box only if it still shows `html` (don't clobber mission help). */
+  clearHelpIf(html: string): void {
+    if (this.cache.get('help') === html) this.showHelp(null);
+  }
+
   big(text: string, cls: string, sub = '', seconds = 3.5): void {
     this.bigMsg.className = `big-msg ${cls}`;
     this.bigMsg.innerHTML = `${text}${sub ? `<small>${sub}</small>` : ''}`;

@@ -135,6 +135,7 @@ export class Renderer {
 
   render(dt: number): void {
     if (this.postRender && this.postRender(dt)) return;
+    this.gl.info.autoReset = true;
     this.gl.render(this.scene, this.camera);
   }
 }

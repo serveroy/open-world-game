@@ -48,6 +48,15 @@ async function boot(): Promise<void> {
   setTimeout(() => el.remove(), 700);
 }
 
+/** Offline support: precache the whole build (production only; dev uses HMR). */
+function registerServiceWorker(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((e: unknown) => console.warn('service worker failed', e));
+  });
+}
+registerServiceWorker();
+
 boot().catch((e: unknown) => {
   status.textContent = 'FAILED TO START: ' + String(e);
   console.error(e);

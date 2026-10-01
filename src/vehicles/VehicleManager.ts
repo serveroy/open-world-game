@@ -1,3 +1,4 @@
+import { registerVehicle, unregisterVehicle } from '../ecs/world';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GROUPS } from '../physics/groups';
@@ -142,6 +143,7 @@ export class VehicleManager implements System {
     v.locked = opts.locked ?? false;
     v.health.onExplode = () => this.explode(v);
     this.vehicles.push(v);
+    registerVehicle(v);
     return v;
   }
 
@@ -149,6 +151,7 @@ export class VehicleManager implements System {
     const i = this.vehicles.indexOf(v);
     if (i < 0) return;
     this.vehicles.splice(i, 1);
+    unregisterVehicle(v);
     v.dispose(this.game.scene);
     for (const f of this.fixedSpawns) if (f.live === v) {
       f.live = null;

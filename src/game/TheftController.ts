@@ -141,6 +141,7 @@ export class TheftController {
   private pickPress(): void {
     if (this.mode !== 'lockpick' || !this.lock) return;
     const r = this.lock.press();
+    this.game.audio.ui(r === 'miss' || r === 'fail' ? 'thud' : 'lockpick', 0.7);
     this.game.haptic(r === 'miss' || r === 'fail' ? [20, 30, 20] : 12);
     this.refreshPins();
     if (r === 'miss') this.msgEl.textContent = 'Slipped! One more mistake and the alarm goes off.';
@@ -219,6 +220,7 @@ export class TheftController {
       if (this.t > 0.4 && !this.glassDone) {
         this.glassDone = true;
         v.u.uGlass.value = 1;
+        g.audio.at('glass', v.position.x, v.position.y + 1, v.position.z, 1, 1, 6);
         v.toWorld(v.info.door, _v);
         const fx = g.vehicles?.effects;
         if (fx) for (let i = 0; i < 12; i++) fx.sharp.emit({ x: _v.x, y: v.position.y + 1.1, z: _v.z, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: (Math.random() - 0.5) * 3, life: 0.7, size0: 0.08, size1: 0.05, color0: 0xd8e8f0, alpha0: 0.9, alpha1: 0.4, gravity: 9.8 });

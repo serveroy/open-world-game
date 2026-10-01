@@ -35,6 +35,7 @@ export class Interactions implements System {
   private markers: Markers;
   private current: InteractPoint | null = null;
   private shown = '';
+  private shownHtml = '';
 
   constructor(private game: Game) {
     this.markers = new Markers(game.scene);
@@ -95,14 +96,15 @@ export class Interactions implements System {
     const label = best ? (typeof best.label === 'function' ? best.label() : best.label) : '';
     const button = best ? (typeof best.button === 'function' ? best.button() : best.button ?? 'USE') : 'USE';
     if (label !== this.shown) {
+      if (this.shownHtml) g.hud.clearHelpIf(this.shownHtml);
       this.shown = label;
-      if (label) g.hud.showHelp(`${g.input.lastDevice === 'touch' ? 'Tap <b>' + button + '</b>' : g.input.lastDevice === 'gamepad' ? 'Press <b>X</b>' : 'Press <b>E</b>'} — ${label}`, 999);
-      else g.hud.showHelp(null);
+      this.shownHtml = label ? `${g.input.lastDevice === 'touch' ? 'Tap <b>' + button + '</b>' : g.input.lastDevice === 'gamepad' ? 'Press <b>X</b>' : 'Press <b>E</b>'} — ${label}` : '';
+      if (label) g.hud.showHelp(this.shownHtml, 999);
     }
     if (!g.theft?.busy) g.touch.setContext('interact', !!best, button);
     if (best && g.input.pressed('interact')) {
-      g.hud.showHelp(null);
-      this.shown = '';
+      g.hud.clearHelpIf(this.shownHtml);
+      this.shown = this.shownHtml = '';
       best.action();
     }
   }

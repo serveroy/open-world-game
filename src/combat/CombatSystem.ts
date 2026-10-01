@@ -128,7 +128,10 @@ export class CombatSystem implements System {
         g.timeScale = 1;
         if (id) this.switchWeapon(id, true);
       }
-      if (inp.pressed('reload') && this.arsenal.startReload()) p.playAction('reload', this.arsenal.def.reload);
+      if (inp.pressed('reload') && this.arsenal.startReload()) {
+        p.playAction('reload', this.arsenal.def.reload);
+        this.game.audio.at('reload', p.pos.x, p.pos.y + 1, p.pos.z, 0.6, 1, 3);
+      }
     }
     if (this.wheel.open) return;
 
@@ -411,6 +414,7 @@ export class CombatSystem implements System {
     } else anim = d.id === 'bat' ? 'swing' : 'stab';
     const dur = d.id === 'bat' ? 0.65 : 0.42;
     p.playAction(anim, dur);
+    this.game.audio.at('swing', p.pos.x, p.pos.y + 1, p.pos.z, 0.5, d.id === 'bat' ? 0.8 : 1.2, 3);
     // face lock-on target / camera
     if (this.target instanceof Ped) p.yaw = headingOf(this.target.pos.x - p.pos.x, this.target.pos.z - p.pos.z);
     else p.yaw = this.game.cam.yaw;

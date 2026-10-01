@@ -50,6 +50,8 @@ import { SaveManager } from './SaveManager';
 import { Phone } from '../ui/Phone';
 import { SettingsUI } from '../ui/SettingsUI';
 import { Menus } from '../ui/Menus';
+import { AudioSystem } from '../audio/AudioSystem';
+import { PostFX } from '../render/PostFX';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -107,6 +109,8 @@ export class Game {
   readonly phone: Phone;
   readonly settingsUI: SettingsUI;
   readonly menus: Menus;
+  readonly audio: AudioSystem;
+  postfx: PostFX | null = null;
   shops: Shops | null = null;
   activities: ActivityManager | null = null;
   collectibles: Collectibles | null = null;
@@ -159,6 +163,14 @@ export class Game {
     this.phone = new Phone(this);
     this.settingsUI = new SettingsUI(this);
     this.menus = new Menus(this);
+    this.audio = new AudioSystem(this);
+    if (this.renderer.preset.bloom) {
+      try {
+        this.postfx = new PostFX(this.renderer, this.settings);
+      } catch {
+        this.postfx = null; // no float render targets: plain rendering
+      }
+    }
     this.ui.onChange = (open) => {
       if (open) this.input.reset();
       this.hud.showHelp(null);
@@ -295,6 +307,7 @@ export class Game {
     this.nightlife = new Nightlife(this);
     this.addSystem({ name: 'nightlife', update: (dt) => this.nightlife!.update(dt) });
     this.addSystem(this.saves);
+    this.audio.attach();
     this.events.on('pedKilled', (e) => {
       if (!e.byPlayer) return;
       this.stats.inc('kills');
@@ -484,6 +497,11 @@ export class Game {
     this.chars.commit();
     this.hud.vitals(p.vitals.health, p.vitals.maxHealth, p.vitals.armor, p.vitals.stamina, p.swimming ? p.vitals.breath : null);
     this.hud.setUnderwater(this.cam.underwater);
+    this.audio.update(dt);
+    if (this.postfx && this.env) {
+      this.postfx.setNight(this.env.night);
+      this.postfx.setHurt(p.vitals.health < 30 && p.mode !== 'dead' ? (1 - p.vitals.health / 30) * (0.6 + 0.4 * Math.sin(this.time * 6)) : 0);
+    }
     this.hud.update(dt);
     this.touch.setMode(this.ui.open && !this.touch.editMode ? 'hidden' : p.mode === 'vehicle' ? this.touchVehicleMode : 'foot');
     if (p.mode === 'foot' && !this.ui.open) this.stats.inc('distanceFoot', Math.hypot(p.vel.x, p.vel.z) * dt);
@@ -504,6 +522,7 @@ export class Game {
     }
     this.touch.setMode(this.ui.open && !this.touch.editMode ? 'hidden' : 'foot');
     this.chars.commit();
+    this.audio.update(dt);
     this.hud.update(dt);
   }
 

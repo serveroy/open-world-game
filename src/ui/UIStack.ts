@@ -36,6 +36,9 @@ export class UIStack {
     if (this.has(s.el)) return;
     this.stack.push(s);
     s.el.classList.add('open');
+    // newest screen always on top, whatever its CSS z-index
+    s.el.dataset.z = s.el.style.zIndex;
+    s.el.style.zIndex = String(80 + this.stack.length * 2);
     try {
       if (document.pointerLockElement) document.exitPointerLock();
     } catch {
@@ -52,6 +55,7 @@ export class UIStack {
     if (i < 0) return;
     const [scr] = this.stack.splice(i, 1);
     scr!.el.classList.remove('open');
+    scr!.el.style.zIndex = scr!.el.dataset.z ?? '';
     scr!.onClose?.();
     this.onChange?.(this.open);
   }

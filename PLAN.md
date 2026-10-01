@@ -2,6 +2,8 @@
 
 > Original, mobile-first, open-world action-crime game for the browser.
 > 100% original IP: no real brands, logos, cities, or characters from existing franchises.
+> **Status: all milestones M0–M9 complete.** Resume from §0 for follow-up work.
+>
 > Engine: Vite + TypeScript (strict) + Three.js (WebGL2) + Rapier physics + miniplex ECS.
 
 ---
@@ -19,7 +21,7 @@
 | M6 Police & wanted system | ✅ done | wanted logic unit-tested; foot cops (arrest/cover/flank), cruisers (route pursuit, ram/PIT), roadblocks + spikes, SWAT, spotlight heli, search cones |
 | M7 Mission system + full story, desert & sea content | ✅ done | JSON missions (23 incl. 2 endings) schema-validated & auto-played in tests; runner w/ checkpoints, fail/retry, cutscenes, choices |
 | M8 Economy, properties, shops, side activities, phone UI | ✅ done | Estate (4 safehouses + garages, 5 businesses), 6 shop types, 3 races, taxi/delivery/theft/rampage, street events, 30 shells, clubs, phone, settings + HUD editor, title/pause, IndexedDB saves |
-| M9 Audio, polish, perf tuning, PWA, Vercel, README | ⬜ todo | |
+| M9 Audio, polish, perf tuning, PWA, Vercel, README | ✅ done | Procedural SFX bank (offline-rendered → Howler, spatial), live engines/sirens/horns/alarms/skids/ambience, 3 generative radio stations; High-preset bloom/vignette/grain; SW registration; ECS index; README; ~130–170 draw calls on High, 1.9 MB gzipped |
 
 **Resume rule:** if a session ends, open this table, find the first milestone that is not ✅,
 read its acceptance criteria in §9 and the "Deviations & Notes" log in §11, then continue.
@@ -418,5 +420,12 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
 - (M8) Saves: IndexedDB `crimson-coast/saves` (auto + 3 manual slots), localStorage then memory
   fallback; auto-save on mission pass, purchases, collectibles, every 3 min of safe free roam and
   when the tab is hidden. `?play=1` skips the title (used by screenshot scripts).
+- (M9) Simulation stays in explicit System classes; miniplex is the shared entity index (every
+  vehicle/ped registered on spawn, tag components `siren`/`hostile`) used for cross-system
+  queries (audio voice assignment). Full ECS migration judged not worth the regression risk.
+- (M9) Sound effects are synthesised in an OfflineAudioContext at boot, WAV-encoded and played via
+  Howler (pooling + spatial panners); continuous sounds (engines, sirens, radio, ambience) are live
+  Web Audio graphs on Howler's AudioContext so one master volume/unlock covers everything.
+- (M9) Post FX (UnrealBloom + grade + OutputPass) only on the High preset; Low/Med render direct.
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.

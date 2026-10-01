@@ -85,6 +85,7 @@ export class Nightlife {
       return;
     }
     this.club = l;
+    g.audio.setClub(true, l.id === 'club_ember' ? 2 : 0);
     g.hud.fade(1, 400);
     setTimeout(() => {
       this.menu();
@@ -116,6 +117,7 @@ export class Nightlife {
     }
     this.drinks = 0;
     this.club = null;
+    g.audio.setClub(false, -1);
   }
 
   private menu(): void {

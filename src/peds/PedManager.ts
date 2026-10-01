@@ -1,3 +1,4 @@
+import { registerPed, unregisterPed } from '../ecs/world';
 import * as THREE from 'three';
 import type { Game, System } from '../game/Game';
 import { Ped, type PedState, type PedArchetype } from './Ped';
@@ -117,6 +118,7 @@ export class PedManager implements System {
     p.archetype = archetype;
     p.cash = Math.floor(this.rng.range(5, 80));
     this.peds.push(p);
+    registerPed(p);
     return p;
   }
 
@@ -126,6 +128,7 @@ export class PedManager implements System {
     if (i < 0) return;
     this.onPedDespawn?.(p);
     this.peds.splice(i, 1);
+    unregisterPed(p);
     this.game.chars.free(p.slot);
     p.dispose();
     if (p.partner) p.partner.partner = null;

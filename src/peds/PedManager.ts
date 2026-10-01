@@ -409,7 +409,7 @@ export class PedManager implements System {
     }
   }
 
-  private moveToward(p: Ped, tx: number, tz: number, speed: number, dt: number, avoidWalls = true): number {
+  moveToward(p: Ped, tx: number, tz: number, speed: number, dt: number, avoidWalls = true): number {
     const dx = tx - p.pos.x, dz = tz - p.pos.z;
     const d = Math.hypot(dx, dz);
     if (d < 0.05) {
@@ -422,7 +422,7 @@ export class PedManager implements System {
       if (p.wallTimer <= 0) {
         p.wallTimer = 0.25;
         const hit = this.game.physics.raycast(p.pos.x, p.pos.y + 0.9, p.pos.z, hx, 0, hz, 2.2, GROUPS.rayWorldVehicles, p.body);
-        if (hit) {
+        if (hit && hit.distance > 0.05 && Math.abs(hit.ny) < 0.7) {
           // turn along the wall
           const nx = hit.nx, nz = hit.nz;
           const tx2 = -nz, tz2 = nx;
@@ -470,7 +470,7 @@ export class PedManager implements System {
     return d;
   }
 
-  private settleGround(p: Ped, dt: number): void {
+  settleGround(p: Ped, dt: number): void {
     p.groundTimer -= dt;
     if (p.groundTimer <= 0) {
       p.groundTimer = 0.3 + rand.next() * 0.2;

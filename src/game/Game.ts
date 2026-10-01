@@ -29,6 +29,8 @@ import { TheftController } from './TheftController';
 import { CombatSystem } from '../combat/CombatSystem';
 import { Wallet } from '../economy/Wallet';
 import { Respawn } from './Respawn';
+import { PoliceManager } from '../police/PoliceManager';
+import type { Blip } from '../ui/Minimap';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -69,6 +71,10 @@ export class Game {
   peds: PedManager | null = null;
   theft: TheftController | null = null;
   combat: CombatSystem | null = null;
+  police: PoliceManager | null = null;
+  /** Extra minimap blip providers (missions, activities). */
+  readonly blipProviders: ((out: Blip[]) => void)[] = [];
+  private blipList: Blip[] = [];
   readonly wallet = new Wallet(0);
   readonly respawn: Respawn;
   baseMap: HTMLCanvasElement | null = null;
@@ -202,6 +208,9 @@ export class Game {
     this.combat = new CombatSystem(this);
     this.addSystem(this.combat);
     this.peds.onPedDespawn = (pd) => this.combat?.ragdolls.remove(pd.slot);
+    this.police = new PoliceManager(this);
+    this.addSystem(this.police);
+    this.respawn.onRespawn = () => this.police?.reset();
     this.peds.onPedAttack = (ped) => {
       const p = this.player;
       if (p.mode !== 'foot' || p.pos.distanceTo(ped.pos) > 1.7) return;
@@ -292,6 +301,11 @@ export class Game {
   }
   hitCooldown = 0;
 
+  /** Debug: set wanted level. */
+  debugWanted(stars: number): void {
+    this.police?.wanted.set(stars);
+  }
+
   /** Debug: give every weapon with ammo. */
   debugArm(): void {
     const a = this.combat?.arsenal;
@@ -348,7 +362,15 @@ export class Game {
       this.world.update(dt, this.focus, this.env.night);
       this.env.update(dt, this.focus, this.renderer.gl);
       this.water?.update(this.renderer.camera, this.time);
-      this.minimap?.draw(dt, p.renderPos.x, p.renderPos.z, this.cam.yaw, p.yaw, Math.hypot(p.vel.x, p.vel.z));
+      if (this.minimap) {
+        const bl = this.blipList;
+        bl.length = 0;
+        this.police?.blips(bl);
+        for (const f of this.blipProviders) f(bl);
+        this.minimap.blips = bl;
+        const sp = this.vctrl?.vehicle ? Math.abs(this.vctrl.vehicle.speed) : Math.hypot(p.vel.x, p.vel.z);
+        this.minimap.draw(dt, p.renderPos.x, p.renderPos.z, this.cam.yaw, p.yaw, sp);
+      }
       this.hud.clockText(this.env.clock.text());
     }
     this.chars.commit();

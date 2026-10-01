@@ -22,11 +22,15 @@ import { Water } from '../render/Water';
 import { Minimap, renderBaseMap } from '../ui/Minimap';
 import { SPAWNS } from '../world/MapData';
 import type { WeatherKind } from '../world/TimeOfDay';
+import { VehicleManager } from '../vehicles/VehicleManager';
+import { VehicleController } from './VehicleController';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
   name: string;
   fixedUpdate?(dt: number): void;
+  /** After the physics step (capture transforms, resolve contacts). */
+  postStep?(dt: number): void;
   update?(dt: number, alpha: number): void;
   lateUpdate?(dt: number): void;
 }
@@ -55,6 +59,8 @@ export class Game {
   env: Environment | null = null;
   water: Water | null = null;
   minimap: Minimap | null = null;
+  vehicles: VehicleManager | null = null;
+  vctrl: VehicleController | null = null;
   baseMap: HTMLCanvasElement | null = null;
   /** Streaming / simulation focus (player or cutscene camera). */
   readonly focus = new THREE.Vector3();
@@ -151,6 +157,27 @@ export class Game {
     this.cam.snapBehind(sp.yaw);
     await progress(0.93, 'Streaming Port Solano');
     this.world.loadAround(sp.x, sp.z);
+    this.vehicles = new VehicleManager(this);
+    this.vctrl = new VehicleController(this, this.vehicles);
+    this.addSystem(this.vehicles);
+    this.vehicles.humans = () => {
+      const p = this.player;
+      return p.mode === 'foot' || p.mode === 'scripted' || p.mode === 'vault' ? [{ x: p.pos.x, y: p.pos.y + 0.9, z: p.pos.z, radius: 0.35, ref: p }] : [];
+    };
+    this.vehicles.onHitHuman = (v, h, speed) => {
+      if (h.ref !== this.player) return;
+      const p = this.player;
+      if (p.vitals.invulnerable || this.hitCooldown > 0) return;
+      this.hitCooldown = 0.8;
+      const lv = v.body.linvel();
+      p.vel.set(lv.x * 0.8 + (p.pos.x - v.position.x) * 2, 3 + speed * 0.15, lv.z * 0.8 + (p.pos.z - v.position.z) * 2);
+      p.grounded = false;
+      p.vitals.damage(speed * 2.6);
+      p.playAction('fall', 1.0);
+      this.hud.damageFlash(Math.min(1, speed / 15));
+      this.cam.addShake(0.6);
+      this.haptic(60);
+    };
     this.settings.onChange((s) => {
       if (this.env) this.env.clock.dayLengthMinutes = s.dayLengthMinutes;
     });
@@ -218,9 +245,22 @@ export class Game {
   }
 
   private fixedUpdate(dt: number): void {
+    if (this.hitCooldown > 0) this.hitCooldown -= dt;
     this.controller.fixedUpdate(dt);
+    this.vctrl?.fixedUpdate(dt);
     for (const s of this.systems) s.fixedUpdate?.(dt);
     this.physics.step();
+    for (const s of this.systems) s.postStep?.(dt);
+  }
+  hitCooldown = 0;
+
+  /** Debug: spawn a vehicle in front of the player. */
+  debugSpawn(id: string, enter = false): unknown {
+    if (!this.vehicles) return null;
+    const p = this.player;
+    const v = this.vehicles.spawn(id, p.pos.x + Math.sin(p.yaw) * 6, p.pos.z + Math.cos(p.yaw) * 6, p.yaw, { role: 'parked' });
+    if (enter) this.vctrl?.enter(v, true);
+    return v.def.name;
   }
 
   private update(dt: number, alpha: number): void {
@@ -231,10 +271,12 @@ export class Game {
     }
     inp.lookX = inp.lookY = 0;
     this.controller.update();
+    this.vctrl?.update(dt);
+    if (!this.vctrl?.inVehicle) this.hud.speedometer(false);
     for (const s of this.systems) s.update?.(dt, alpha);
     const p = this.player;
     const aimStyle = this.controller.aiming ? (p.held === 'none' ? 'melee' : p.held === 'pistol' ? 'pistol' : p.held === 'grenade' || p.held === 'molotov' ? 'throw' : p.held === 'bat' || p.held === 'knife' ? 'melee' : 'rifle') : 'none';
-    p.updateVisual(dt, alpha, this.cam.pitch * -0.9 + 0.15, aimStyle);
+    if (p.mode !== 'scripted') p.updateVisual(dt, alpha, this.cam.pitch * -0.9 + 0.15, aimStyle);
     if (p.mode === 'foot' || p.mode === 'vault' || p.mode === 'dead' || p.mode === 'ragdoll' || p.mode === 'scripted') {
       _head.copy(p.renderPos);
       _head.y += p.swimming ? 0.9 : p.anim.crouch > 0.5 ? 1.15 : 1.6;

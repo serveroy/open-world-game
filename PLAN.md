@@ -398,5 +398,10 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
   chunk using a patched standard material (procedural windows via `uvm`/`wparams`, `flat`
   varyings to avoid hash flicker). Far terrain + skyline are single meshes whose vertices are
   collapsed for loaded chunks via a 16×12 mask texture (no z-fighting with near chunks).
+- (M3) Rapier user forces persist between steps → vehicles call `resetForces/resetTorques`
+  at the start of every fixed step. Positive Rapier wheel steering turns left (we negate).
+- (M3) Car-vs-human hits use OBB proximity tests (no physical contact), so cars never stop
+  dead against a kinematic capsule. Breakable props become short-lived debris bodies.
+- (M3) Car radio & engine audio are implemented with the audio milestone (M9).
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.

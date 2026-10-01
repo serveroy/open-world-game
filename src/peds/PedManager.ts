@@ -120,9 +120,11 @@ export class PedManager implements System {
     return p;
   }
 
+  onPedDespawn: ((p: Ped) => void) | null = null;
   despawn(p: Ped): void {
     const i = this.peds.indexOf(p);
     if (i < 0) return;
+    this.onPedDespawn?.(p);
     this.peds.splice(i, 1);
     this.game.chars.free(p.slot);
     p.dispose();
@@ -183,6 +185,7 @@ export class PedManager implements System {
         perimeterPoint(block, s, _pp);
         const p = this.spawn(app, _pp.x, block.y, _pp.z, 'walk', arche);
         if (!p) return;
+        if (arche === 'gang' && rand.chance(0.45)) p.weapon = rand.chance(0.8) ? 'pistol' : 'smg';
         p.block = block.id;
         p.pathS = s;
         p.pathDir = rand.chance(0.5) ? 1 : -1;

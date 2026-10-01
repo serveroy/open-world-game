@@ -191,3 +191,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color:
 .cb-protanopia .game-canvas { filter: url(#cb-protanopia); }
 .cb-deuteranopia .game-canvas { filter: url(#cb-deuteranopia); }
 .cb-tritanopia .game-canvas { filter: url(#cb-tritanopia); }
+
+.scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, transparent 0, transparent 34vh, rgba(0,0,0,.96) 34.4vh); }
+.scope::before, .scope::after { content: ''; position: absolute; background: rgba(0,0,0,.85); }
+.scope::before { left: 50%; top: 16vh; bottom: 16vh; width: 2px; margin-left: -1px; }
+.scope::after { top: 50%; left: calc(50% - 34vh); right: calc(50% - 34vh); height: 2px; margin-top: -1px; }

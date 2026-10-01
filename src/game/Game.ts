@@ -26,6 +26,9 @@ import { VehicleManager } from '../vehicles/VehicleManager';
 import { VehicleController } from './VehicleController';
 import { PedManager } from '../peds/PedManager';
 import { TheftController } from './TheftController';
+import { CombatSystem } from '../combat/CombatSystem';
+import { Wallet } from '../economy/Wallet';
+import { Respawn } from './Respawn';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -65,6 +68,9 @@ export class Game {
   vctrl: VehicleController | null = null;
   peds: PedManager | null = null;
   theft: TheftController | null = null;
+  combat: CombatSystem | null = null;
+  readonly wallet = new Wallet(0);
+  readonly respawn: Respawn;
   baseMap: HTMLCanvasElement | null = null;
   /** Streaming / simulation focus (player or cutscene camera). */
   readonly focus = new THREE.Vector3();
@@ -101,6 +107,11 @@ export class Game {
     this.cam.shakeScale = this.settings.data.screenShake;
     this.player = new Player(this.physics, this.chars, 0, 0.2, 0);
     this.controller = new PlayerController(this);
+    this.respawn = new Respawn(this);
+    this.wallet.onChange = (cash, delta) => {
+      this.hud.setCash(cash);
+      if (delta !== 0) this.events.emit('cashChanged', { amount: cash, delta });
+    };
     this.player.onLanded = (h) => {
       if (h > 4.5) {
         const dmg = (h - 4.5) * 12;
@@ -177,7 +188,8 @@ export class Game {
       p.vel.set(lv.x * 0.8 + (p.pos.x - v.position.x) * 2, 3 + speed * 0.15, lv.z * 0.8 + (p.pos.z - v.position.z) * 2);
       p.grounded = false;
       p.vitals.damage(speed * 2.6);
-      p.playAction('fall', 1.0);
+      if (speed > 7 && this.combat) this.combat.ragdollPlayer(new THREE.Vector3(lv.x * 0.6, 2 + speed * 0.2, lv.z * 0.6), 2.4);
+      else p.playAction('fall', 1.0);
       this.hud.damageFlash(Math.min(1, speed / 15));
       this.cam.addShake(0.6);
       this.haptic(60);
@@ -187,6 +199,9 @@ export class Game {
     this.theft = new TheftController(this, this.peds);
     this.addSystem({ name: 'theft', fixedUpdate: (dt) => this.theft!.fixedUpdate(dt), update: () => this.theft!.update() });
     this.vctrl.onTryEnter = (v) => this.theft!.tryEnter(v);
+    this.combat = new CombatSystem(this);
+    this.addSystem(this.combat);
+    this.peds.onPedDespawn = (pd) => this.combat?.ragdolls.remove(pd.slot);
     this.peds.onPedAttack = (ped) => {
       const p = this.player;
       if (p.mode !== 'foot' || p.pos.distanceTo(ped.pos) > 1.7) return;
@@ -277,6 +292,13 @@ export class Game {
   }
   hitCooldown = 0;
 
+  /** Debug: give every weapon with ammo. */
+  debugArm(): void {
+    const a = this.combat?.arsenal;
+    if (!a) return;
+    for (const id of ['bat', 'knife', 'pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'grenade', 'molotov'] as const) a.give(id, 999);
+  }
+
   /** Debug: spawn a vehicle in front of the player. */
   debugSpawn(id: string, enter = false): unknown {
     if (!this.vehicles) return null;
@@ -288,11 +310,12 @@ export class Game {
 
   private update(dt: number, alpha: number): void {
     const inp = this.input;
-    if (!this.inputLocked) {
+    const wheelOpen = this.combat?.wheel.open ?? false;
+    if (!this.inputLocked && !wheelOpen) {
       const aimScale = this.controller.aiming ? this.settings.data.aimSensitivity : 1;
       this.cam.look(inp.lookX * aimScale, inp.lookY * aimScale);
+      inp.lookX = inp.lookY = 0;
     }
-    inp.lookX = inp.lookY = 0;
     this.controller.update();
     this.vctrl?.update(dt);
     if (!this.vctrl?.inVehicle) this.hud.speedometer(false);
@@ -300,12 +323,25 @@ export class Game {
     const p = this.player;
     const aimStyle = this.controller.aiming ? (p.held === 'none' ? 'melee' : p.held === 'pistol' ? 'pistol' : p.held === 'grenade' || p.held === 'molotov' ? 'throw' : p.held === 'bat' || p.held === 'knife' ? 'melee' : 'rifle') : 'none';
     if (!(this.vctrl && this.vctrl.inVehicle)) p.updateVisual(dt, alpha, this.cam.pitch * -0.9 + 0.15, aimStyle);
+    if (this.cam.mode === 'scope') this.chars.hide(p.slot);
+    if (p.mode === 'ragdoll' || p.mode === 'dead') {
+      const rd = this.combat?.ragdolls.of(p.slot);
+      if (rd) {
+        rd.position(p.renderPos);
+        p.pos.copy(p.renderPos);
+        p.prevPos.copy(p.pos);
+      }
+    }
     if (p.mode === 'foot' || p.mode === 'vault' || p.mode === 'dead' || p.mode === 'ragdoll' || p.mode === 'scripted') {
       _head.copy(p.renderPos);
       _head.y += p.swimming ? 0.9 : p.anim.crouch > 0.5 ? 1.15 : 1.6;
       this.cam.update(dt, _head, p.yaw, Math.hypot(p.vel.x, p.vel.z), { excludeBody: p.body });
     }
+    inp.lookX = inp.lookY = 0;
     for (const s of this.systems) s.lateUpdate?.(dt);
+    // death check
+    if (p.vitals.dead && !this.respawn.active) this.respawn.wasted();
+    this.respawn.update(dt);
     this.test?.update(p.renderPos);
     if (this.world && this.env) {
       if (p.mode !== 'scripted' || this.cam.mode !== 'cutscene') this.focus.copy(p.renderPos);

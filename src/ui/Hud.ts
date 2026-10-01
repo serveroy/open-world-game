@@ -27,6 +27,7 @@ export class Hud {
   private hitmarker: HTMLElement;
   private vignette: HTMLElement;
   private underwater: HTMLElement;
+  private scopeEl: HTMLElement;
   private speedo: HTMLElement;
   private toasts: HTMLElement;
   private help: HTMLElement;
@@ -55,6 +56,7 @@ export class Hud {
     this.root = el('div', 'ui-layer', parent);
     this.vignette = el('div', 'damage-vignette', this.root);
     this.underwater = el('div', 'underwater', this.root);
+    this.scopeEl = el('div', 'scope', this.root);
     const tr = el('div', 'hud-top-right', this.root);
     this.clock = el('div', 'hud-clock', tr);
     this.cash = el('div', 'hud-cash', tr);
@@ -182,6 +184,10 @@ export class Hud {
 
   damageFlash(intensity = 1): void {
     this.dmgTimer = Math.min(1, this.dmgTimer + 0.5 * intensity);
+  }
+
+  scope(on: boolean): void {
+    this.setStyle('scope', this.scopeEl, 'display', on ? 'block' : 'none');
   }
 
   setUnderwater(on: boolean): void {

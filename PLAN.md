@@ -15,7 +15,7 @@
 | M2 World streaming, districts, roads, lighting, day/night, weather | ✅ done | ~120 draw calls downtown (High), 1 draw call per chunk via world shader |
 | M3 Vehicles: models, handling, damage, traffic AI | ✅ done | 18 procedural vehicles; handling + traffic AI unit-tested headless; radio & engine audio in M9 |
 | M4 Pedestrians + carjacking & theft | ✅ done | instanced peds with routines & reactions; carjack, smash, lockpick mini-game, alarms, hot cars |
-| M5 Weapons, shooting, melee, ragdolls | ⬜ todo | |
+| M5 Weapons, shooting, melee, ragdolls | ✅ done | 10 weapons, wheel, lock-on/swipe/gyro aim, throwables + fire zones, 7-body ragdolls, wasted flow; gun shop in M8 |
 | M6 Police & wanted system | ⬜ todo | |
 | M7 Mission system + full story, desert & sea content | ⬜ todo | |
 | M8 Economy, properties, shops, side activities, phone UI | ⬜ todo | |

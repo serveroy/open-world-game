@@ -1,5 +1,8 @@
 import { STATIONS, chordOn, makeSong, midiToFreq, sectionAt, stepTime, type Song, type StationDef } from './music';
 
+/** Make-up gain after the radio compressor (tuned so the music bus sits near −18 dBFS RMS). */
+export const RADIO_MAKEUP = 3.2;
+
 /**
  * Three procedural radio stations synthesised live with Web Audio. Each station keeps playing a
  * seeded "song" (drums, bass, chords, lead); songs rotate every few dozen bars. A look-ahead
@@ -22,6 +25,7 @@ export class Radio {
   private muffle = 0;
   /** Reverb send (procedural plate impulse). */
   private send: GainNode;
+  private makeup: GainNode;
   /** Gap between songs (DJ talks); ctx time when the next song starts. */
   private breakUntil = 0;
   private prev: Song | null = null;
@@ -36,7 +40,17 @@ export class Radio {
     this.speaker.type = 'lowpass';
     this.speaker.frequency.value = 7000;
     this.speaker.Q.value = 0.4;
-    this.speaker.connect(this.out).connect(dest);
+    // broadcast-style loudness: gentle compression + make-up gain so quiet intros and full
+    // choruses play at a consistent level (radio sat ~14 dB under the engine before)
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -26;
+    comp.knee.value = 10;
+    comp.ratio.value = 3.5;
+    comp.attack.value = 0.01;
+    comp.release.value = 0.3;
+    this.makeup = ctx.createGain();
+    this.makeup.gain.value = RADIO_MAKEUP;
+    this.speaker.connect(comp).connect(this.makeup).connect(this.out).connect(dest);
     // reverb: exponentially decaying stereo noise impulse
     const len = Math.floor(ctx.sampleRate * 2.2);
     const ir = ctx.createBuffer(2, len, ctx.sampleRate);

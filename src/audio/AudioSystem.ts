@@ -11,6 +11,17 @@ import { coastX, districtAt } from '../world/MapData';
 import type { Ped } from '../peds/Ped';
 import { sirensQ, syncTags, vehiclesQ } from '../ecs/world';
 
+/**
+ * Cabin gain while the radio plays (≈ −9 dB). Tuned against measured bus levels so the music
+ * leads the player's own engine by ~11 dB at idle and ≥6 dB at full throttle.
+ */
+export const CABIN_UNDER_RADIO = 0.35;
+
+/** Gain for the player's own vehicle sounds (pure; unit-tested). */
+export function cabinGain(radioOn: boolean, speaking: boolean): number {
+  return (radioOn ? CABIN_UNDER_RADIO : 1) * (speaking ? 0.7 : 1);
+}
+
 const _f = new THREE.Vector3();
 const _u = new THREE.Vector3();
 
@@ -193,6 +204,10 @@ export class AudioSystem implements System {
   private silentEl: HTMLAudioElement | null = null;
   private babbleUntil = 0;
   private wakeT = 0;
+  private cabin!: GainNode;
+  private cabinLp!: BiquadFilterNode;
+  /** Radio is audibly playing in the player's vehicle (drives the cabin duck). */
+  private radioOn = false;
   private sfxBuilding = false;
   private volHooked = false;
 
@@ -252,13 +267,22 @@ export class AudioSystem implements System {
     this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    this.player = new EngineVoice(ctx, this.sfxBus, this.noise, false);
+    // "cabin" bus: the player's own vehicle (engine, tyres, wind). Ducked and muffled under the
+    // radio like a real car interior; alarms (crashes, guns, sirens, horns) stay on sfxBus.
+    this.cabin = ctx.createGain();
+    this.cabinLp = ctx.createBiquadFilter();
+    this.cabinLp.type = 'lowpass';
+    this.cabinLp.frequency.value = 16000;
+    this.cabinLp.Q.value = 0.5;
+    this.cabin.connect(this.cabinLp).connect(this.sfxBus);
+    this.player = new EngineVoice(ctx, this.cabin, this.noise, false);
     for (let i = 0; i < 3; i++) this.ai.push(new EngineVoice(ctx, this.sfxBus, this.noise, true));
     for (let i = 0; i < 2; i++) this.sirens.push(new ToneVoice(ctx, this.sfxBus, 'sawtooth', 2400));
     for (let i = 0; i < 2; i++) this.horns.push(new ToneVoice(ctx, this.sfxBus, 'square', 1800));
     this.alarm = new ToneVoice(ctx, this.sfxBus, 'square', 2600);
+    // tyre screech = loss of grip: gameplay feedback, so it is NOT ducked under the radio
     this.skidG = this.loopNoise('bandpass', 1100, 1.2);
-    this.windG = this.loopNoise('lowpass', 500, 0.7);
+    this.windG = this.loopNoise('lowpass', 500, 0.7, this.cabin);
     for (const [k, type, f] of [['city', 'lowpass', 260], ['wind', 'bandpass', 420], ['waves', 'lowpass', 520], ['rain', 'highpass', 2600]] as const) {
       const flt = ctx.createBiquadFilter();
       flt.type = type;
@@ -436,7 +460,7 @@ export class AudioSystem implements System {
     }, 120);
   }
 
-  private loopNoise(type: BiquadFilterType, f: number, q: number): GainNode {
+  private loopNoise(type: BiquadFilterType, f: number, q: number, dest: AudioNode = this.sfxBus): GainNode {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = this.noise;
@@ -447,7 +471,7 @@ export class AudioSystem implements System {
     flt.Q.value = q;
     const g = ctx.createGain();
     g.gain.value = 0;
-    src.connect(flt).connect(g).connect(this.sfxBus);
+    src.connect(flt).connect(g).connect(dest);
     src.start(0, Math.random() * 2);
     return g;
   }
@@ -602,6 +626,10 @@ export class AudioSystem implements System {
       }
     }
     this.updateRadio(dt, pv, paused);
+    // mix: with the radio on, the player's car sits ~8 dB under the music and is muffled
+    // (cabin perspective); a bit more under speech so DJ/story lines stay intelligible
+    this.cabin.gain.setTargetAtTime(cabinGain(this.radioOn, this.speaking), t, 0.25);
+    this.cabinLp.frequency.setTargetAtTime(this.radioOn ? 2600 : 16000, t, 0.25);
   }
 
   private chirp(t: number): void {
@@ -679,6 +707,7 @@ export class AudioSystem implements System {
     if (!r) return;
     void dt;
     if (this.inClub) {
+      this.radioOn = false;
       r.setLevel(0.9, 0);
       r.update();
       return;
@@ -690,6 +719,7 @@ export class AudioSystem implements System {
       r.tune(this.station);
       if (this.station >= 0) g.hud.radio(`${STATIONS[this.station]!.name} · ${r.songArtist} — “${r.songTitle}”`);
     }
+    this.radioOn = inVeh && this.station >= 0 && !paused;
     if (inVeh && this.station >= 0) {
       if (!r.current) {
         r.tune(this.station);

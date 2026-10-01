@@ -427,5 +427,6 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
   Howler (pooling + spatial panners); continuous sounds (engines, sirens, radio, ambience) are live
   Web Audio graphs on Howler's AudioContext so one master volume/unlock covers everything.
 - (M9) Post FX (UnrealBloom + grade + OutputPass) only on the High preset; Low/Med render direct.
+- (Post-M9) In-car mix: radio is the foreground (compressed, about −16 dBFS RMS). The player's vehicle goes through a cabin bus that is ducked about 9 dB and muffled while the radio plays. Warning sounds (skids, crashes, guns, sirens, horns) bypass the duck. Levels were tuned against measured bus RMS (`CABIN_UNDER_RADIO`, `RADIO_MAKEUP`).
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.

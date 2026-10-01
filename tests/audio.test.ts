@@ -89,3 +89,14 @@ describe('wav encoding', () => {
     expect(Math.max(...s.map(Math.abs))).toBeCloseTo(0.8);
   });
 });
+
+describe('in-car mix', async () => {
+  const { cabinGain, CABIN_UNDER_RADIO } = await import('../src/audio/AudioSystem');
+  it('ducks the player car under the radio (≈ −9 dB) and a little more under speech', () => {
+    expect(cabinGain(false, false)).toBe(1);
+    expect(20 * Math.log10(cabinGain(true, false))).toBeCloseTo(20 * Math.log10(CABIN_UNDER_RADIO));
+    expect(20 * Math.log10(cabinGain(true, false))).toBeLessThan(-8);
+    expect(cabinGain(true, true)).toBeLessThan(cabinGain(true, false));
+    expect(cabinGain(false, true)).toBeLessThan(1);
+  });
+});

@@ -146,6 +146,7 @@ export class Player {
       this.stepVault(dt);
       return;
     }
+    if (this.mode === 'scripted') return;
     if (this.mode !== 'foot') return;
 
     const mag = Math.min(1, Math.hypot(intent.dx, intent.dz));

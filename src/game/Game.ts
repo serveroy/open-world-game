@@ -24,6 +24,8 @@ import { SPAWNS } from '../world/MapData';
 import type { WeatherKind } from '../world/TimeOfDay';
 import { VehicleManager } from '../vehicles/VehicleManager';
 import { VehicleController } from './VehicleController';
+import { PedManager } from '../peds/PedManager';
+import { TheftController } from './TheftController';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -61,6 +63,8 @@ export class Game {
   minimap: Minimap | null = null;
   vehicles: VehicleManager | null = null;
   vctrl: VehicleController | null = null;
+  peds: PedManager | null = null;
+  theft: TheftController | null = null;
   baseMap: HTMLCanvasElement | null = null;
   /** Streaming / simulation focus (player or cutscene camera). */
   readonly focus = new THREE.Vector3();
@@ -178,6 +182,19 @@ export class Game {
       this.cam.addShake(0.6);
       this.haptic(60);
     };
+    this.peds = new PedManager(this);
+    this.addSystem(this.peds);
+    this.theft = new TheftController(this, this.peds);
+    this.addSystem({ name: 'theft', fixedUpdate: (dt) => this.theft!.fixedUpdate(dt), update: () => this.theft!.update() });
+    this.vctrl.onTryEnter = (v) => this.theft!.tryEnter(v);
+    this.peds.onPedAttack = (ped) => {
+      const p = this.player;
+      if (p.mode !== 'foot' || p.pos.distanceTo(ped.pos) > 1.7) return;
+      p.vitals.damage(5 + Math.random() * 4);
+      this.hud.damageFlash(0.35);
+      this.cam.addShake(0.15);
+      this.haptic(25);
+    };
     this.settings.onChange((s) => {
       if (this.env) this.env.clock.dayLengthMinutes = s.dayLengthMinutes;
     });
@@ -187,6 +204,12 @@ export class Game {
   teleport(x: number, z: number, yaw = this.player.yaw, y?: number): void {
     this.world?.loadAround(x, z);
     const gy = y ?? Math.max(this.world ? this.world.groundY(x, z) : 0, 0) + 0.3;
+    const v = this.vctrl?.vehicle;
+    if (v) {
+      v.teleport(x, gy + 0.3, z, yaw);
+      this.cam.snapBehind(yaw);
+      return;
+    }
     this.player.teleport(x, gy, z, yaw);
     this.cam.snapBehind(yaw);
   }
@@ -276,7 +299,7 @@ export class Game {
     for (const s of this.systems) s.update?.(dt, alpha);
     const p = this.player;
     const aimStyle = this.controller.aiming ? (p.held === 'none' ? 'melee' : p.held === 'pistol' ? 'pistol' : p.held === 'grenade' || p.held === 'molotov' ? 'throw' : p.held === 'bat' || p.held === 'knife' ? 'melee' : 'rifle') : 'none';
-    if (p.mode !== 'scripted') p.updateVisual(dt, alpha, this.cam.pitch * -0.9 + 0.15, aimStyle);
+    if (!(this.vctrl && this.vctrl.inVehicle)) p.updateVisual(dt, alpha, this.cam.pitch * -0.9 + 0.15, aimStyle);
     if (p.mode === 'foot' || p.mode === 'vault' || p.mode === 'dead' || p.mode === 'ragdoll' || p.mode === 'scripted') {
       _head.copy(p.renderPos);
       _head.y += p.swimming ? 0.9 : p.anim.crouch > 0.5 ? 1.15 : 1.6;

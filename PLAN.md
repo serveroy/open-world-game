@@ -14,7 +14,7 @@
 | M1 Player controller, camera, touch controls, test area | ✅ done | `?test=1` sandbox: vault/climb/swim/cover verified via smoke |
 | M2 World streaming, districts, roads, lighting, day/night, weather | ✅ done | ~120 draw calls downtown (High), 1 draw call per chunk via world shader |
 | M3 Vehicles: models, handling, damage, traffic AI | ⬜ todo | |
-| M4 Pedestrians + carjacking & theft | ⬜ todo | |
+| M4 Pedestrians + carjacking & theft | ✅ done | instanced peds with routines & reactions; carjack, smash, lockpick mini-game, alarms, hot cars |
 | M5 Weapons, shooting, melee, ragdolls | ⬜ todo | |
 | M6 Police & wanted system | ⬜ todo | |
 | M7 Mission system + full story, desert & sea content | ⬜ todo | |

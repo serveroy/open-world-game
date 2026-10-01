@@ -32,7 +32,7 @@ export const GROUPS = {
   rayBullets: groups(ALL, G.STATIC | G.VEHICLE | G.PED | G.PLAYER | G.PROP | G.RAGDOLL),
   rayCamera: groups(ALL, G.STATIC),
   /** Character controllers move against these */
-  kccPlayer: groups(ALL, G.STATIC | G.VEHICLE | G.PROP),
+  kccPlayer: groups(ALL, G.STATIC | G.VEHICLE | G.PROP | G.PED),
   kccPed: groups(ALL, G.STATIC | G.VEHICLE | G.PROP),
   /** Note: player/ped colliders don't generate contacts with vehicles; car-vs-human hits are
    *  resolved by proximity queries (knockdown/ragdoll), so cars never stop dead on a capsule. */

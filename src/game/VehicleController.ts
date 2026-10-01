@@ -181,6 +181,7 @@ export class VehicleController {
           }
           this.phase = 'opening';
           this.phaseT = 0;
+          p.vel.set(0, 0, 0);
           p.yaw = headingOf(v.position.x - p.pos.x, v.position.z - p.pos.z);
           p.playAction('open_door', 0.45);
         }
@@ -246,13 +247,7 @@ export class VehicleController {
       if (near && g.input.pressed('enter')) this.enter(near);
     } else g.touch.setContext('enter', false);
 
-    if (this.target && this.phase !== 'none') {
-      // render player walking toward the car via normal path
-      p.mode = 'foot';
-      p.updateVisual(dt, g.alpha, 0, 'none');
-      p.mode = 'scripted';
-      return;
-    }
+    if (this.target && this.phase !== 'none') return;
     const v = this.vehicle;
     if (!v) return;
     // seated character follows the vehicle

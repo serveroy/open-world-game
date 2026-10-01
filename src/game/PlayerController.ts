@@ -33,6 +33,10 @@ export class PlayerController {
   fixedUpdate(dt: number): void {
     const g = this.game;
     const p = g.player;
+    if (p.mode === 'scripted') {
+      p.step(dt, this.footIntent());
+      return;
+    }
     if (p.mode !== 'foot' && p.mode !== 'vault') return;
     const inp = g.input;
     if (g.inputLocked) {

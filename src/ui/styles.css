@@ -184,6 +184,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color:
 .dance-prompt { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 54px; font-weight: 900; display: none; text-shadow: 0 0 20px #f0f; }
 .radio-name { position: absolute; top: calc(18px + var(--sat)); left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 800; letter-spacing: .12em; text-shadow: 0 2px 3px #000; opacity: 0; transition: opacity .4s; }
 .zone-name { position: absolute; right: calc(18px + var(--sar)); bottom: calc(60px + var(--sab)); font-size: 22px; font-weight: 900; font-style: italic; letter-spacing: .08em; text-shadow: 0 2px 3px #000; opacity: 0; transition: opacity .8s; }
+.touch-on .help { left: 50%; transform: translateX(-50%); top: calc(54px + var(--sat)); max-width: min(460px, 56vw); }
 .touch-on .zone-name { right: 50%; transform: translateX(50%); bottom: auto; top: calc(48px + var(--sat)); font-size: 18px; }
 
 /* colour-blind filters applied to canvas */

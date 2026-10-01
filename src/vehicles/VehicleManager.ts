@@ -439,7 +439,11 @@ export class VehicleManager implements System {
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = 0.35;
-      if (this.trafficCount() < this.maxTraffic) this.spawnTraffic();
+      const tc = this.trafficCount();
+      if (tc < this.maxTraffic) {
+        this.spawnTraffic();
+        if (tc < this.maxTraffic * 0.5) this.spawnTraffic();
+      }
       for (const f of this.fixedSpawns) {
         const d = Math.hypot(f.x - focus.x, f.z - focus.z);
         if (!f.live && d < 260 && game.time >= f.respawnAt && game.world?.isLoaded(f.x, f.z)) {

@@ -209,7 +209,7 @@ export class Environment {
     this.hemi.color.copy(this.skyZenith).lerp(_ca.setHex(0xffffff), 0.35);
     if (n > 0) this.hemi.color.lerp(_ca.setHex(0x5a70b0), n);
     this.hemi.groundColor.setHex(0x7a6a58).lerp(_ca.setHex(0x2a2430), n);
-    this.hemi.intensity = lerp(1.15, 0.85, n) * (1 - wp.cloud * 0.15) + this.lightning;
+    this.hemi.intensity = lerp(1.45, 0.85, n) * (1 - wp.cloud * 0.15) + this.lightning;
 
     // fog
     const far = this.camera.far;

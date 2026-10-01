@@ -639,15 +639,17 @@ export class CombatSystem implements System {
     if (p.mode === 'dead') return;
     for (const ped of g.peds?.peds ?? []) {
       if (!ped.alive || !ped.hostile || !ped.weapon || ped.archetype === 'cop' || ped.archetype === 'swat') continue;
-      if (ped.state !== 'fight' && ped.state !== 'chase') continue;
-      ped.held = WEAPONS[ped.weapon as WeaponId]?.held ?? 'pistol';
+      const driving = ped.state === 'driving' && !!ped.vehicle;
+      if (ped.state !== 'fight' && ped.state !== 'chase' && !driving) continue;
+      if (!driving) ped.held = WEAPONS[ped.weapon as WeaponId]?.held ?? 'pistol';
+      if (driving) ped.pos.copy(ped.vehicle!.position).y += 1;
       const d = ped.pos.distanceTo(p.pos);
-      if (d > 35 || d < 2) continue;
+      if (d > (driving ? 40 : 38) || d < 2) continue;
       ped.attackCooldown -= dt * 0.5;
       if (ped.attackCooldown > 0) continue;
-      if (!g.physics.lineOfSight(ped.pos.x, ped.pos.y + 1.5, ped.pos.z, p.pos.x, p.pos.y + 1.2, p.pos.z, true)) continue;
-      ped.attackCooldown = 0.6 + rand.next() * 0.8;
-      ped.yaw = headingOf(p.pos.x - ped.pos.x, p.pos.z - ped.pos.z);
+      if (!g.physics.lineOfSight(ped.pos.x, ped.pos.y + 1.5, ped.pos.z, p.pos.x, p.pos.y + 1.2, p.pos.z, !driving)) continue;
+      ped.attackCooldown = (driving ? 1.1 : 0.6) + rand.next() * 0.8;
+      if (!driving) ped.yaw = headingOf(p.pos.x - ped.pos.x, p.pos.z - ped.pos.z);
       this.npcShoot(ped, p.pos.x, p.pos.y + 1.2, p.pos.z, ped.weapon as WeaponId, 0.45);
     }
   }

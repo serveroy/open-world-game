@@ -670,13 +670,31 @@ export class PedManager implements System {
       case 'fight':
       case 'chase': {
         const pl = this.game.player;
+        const committed = p.persistent && p.hostile;
+        const d = Math.hypot(playerPos.x - p.pos.x, playerPos.z - p.pos.z);
+        if (p.weapon && p.hostile) {
+          // armed: hold a firing distance and strafe; CombatSystem handles the shooting
+          const want = 11 + (p.id % 5);
+          const dx = p.pos.x - playerPos.x, dz = p.pos.z - playerPos.z;
+          const dd = Math.hypot(dx, dz) || 1;
+          const side = p.id % 2 ? 1 : -1;
+          const strafe = Math.sin(this.game.time * 0.7 + p.id) * 4 * side;
+          const tx = playerPos.x + (dx / dd) * want + (-dz / dd) * strafe, tz = playerPos.z + (dz / dd) * want + (dx / dd) * strafe;
+          if (Math.abs(d - want) > 2 || Math.abs(strafe) > 1) this.moveToward(p, tx, tz, d > 30 ? 5 : 2.6, dt, true);
+          else p.vel.multiplyScalar(0.7);
+          if (Math.hypot(p.vel.x, p.vel.z) < 1.2) p.yaw = dampAngle(p.yaw, headingOf(playerPos.x - p.pos.x, playerPos.z - p.pos.z), 8, dt);
+          if (!committed && (d > 60 || p.stateT > 60)) {
+            p.hostile = false;
+            this.resumeRoutine(p);
+          }
+          break;
+        }
         if (pl.mode === 'vehicle' || pl.mode === 'dead') {
-          if (p.stateT > 3) this.resumeRoutine(p);
+          if (p.stateT > 3 && !committed) this.resumeRoutine(p);
           p.vel.multiplyScalar(0.9);
           break;
         }
-        const d = Math.hypot(playerPos.x - p.pos.x, playerPos.z - p.pos.z);
-        if (d > 35 || p.stateT > 40) {
+        if (!committed && (d > 35 || p.stateT > 40)) {
           p.hostile = false;
           this.resumeRoutine(p);
           break;

@@ -408,8 +408,8 @@ export class WorldData {
     for (let z = mb.z0 + 30; z < mb.z1 - 10; z += 45) this.props.push({ type: 'pier', x: (mb.x0 + mb.x1) / 2 + 10, y: WATER_Y + 1.1, z, yaw: 0, s: 1, c: 0, w: mb.x1 - mb.x0 - 20, d: 4, h: 0.4 });
     this.props.push({ type: 'pier', x: mb.x1 - 4, y: WATER_Y + 1.1, z: (mb.z0 + mb.z1) / 2, yaw: 0, s: 1, c: 0, w: 8, d: mb.z1 - mb.z0, h: 0.4 });
     // Coral Keys dock + Pelican Isle pier
-    this.props.push({ type: 'pier', x: -1105, y: WATER_Y + 1.1, z: -640, yaw: 0, s: 1, c: 0, w: 40, d: 5, h: 0.4 });
-    this.props.push({ type: 'pier', x: -1085, y: WATER_Y + 1.1, z: 610, yaw: 0, s: 1, c: 0, w: 40, d: 5, h: 0.4 });
+    this.props.push({ type: 'pier', x: -1080, y: WATER_Y + 1.1, z: -640, yaw: 0, s: 1, c: 0, w: 40, d: 5, h: 0.4 });
+    this.props.push({ type: 'pier', x: -1068, y: WATER_Y + 1.1, z: 610, yaw: 0, s: 1, c: 0, w: 40, d: 5, h: 0.4 });
     // island palms
     for (let i = 0; i < 60; i++) {
       const isl = i < 30 ? { x: -1250, z: -650, r: 140 } : { x: -1200, z: 600, r: 110 };

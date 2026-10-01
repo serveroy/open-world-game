@@ -31,6 +31,7 @@ import { Wallet } from '../economy/Wallet';
 import { Respawn } from './Respawn';
 import { PoliceManager } from '../police/PoliceManager';
 import type { Blip } from '../ui/Minimap';
+import { MissionManager } from '../missions/MissionManager';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -72,6 +73,7 @@ export class Game {
   theft: TheftController | null = null;
   combat: CombatSystem | null = null;
   police: PoliceManager | null = null;
+  missions: MissionManager | null = null;
   /** Extra minimap blip providers (missions, activities). */
   readonly blipProviders: ((out: Blip[]) => void)[] = [];
   private blipList: Blip[] = [];
@@ -211,6 +213,9 @@ export class Game {
     this.police = new PoliceManager(this);
     this.addSystem(this.police);
     this.respawn.onRespawn = () => this.police?.reset();
+    this.missions = new MissionManager(this);
+    this.addSystem(this.missions);
+    if (params.mission) this.missions.debugStart(params.mission);
     this.peds.onPedAttack = (ped) => {
       const p = this.player;
       if (p.mode !== 'foot' || p.pos.distanceTo(ped.pos) > 1.7) return;

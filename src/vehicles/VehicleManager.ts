@@ -110,8 +110,8 @@ export class VehicleManager implements System {
     add('skiff', mb.x0 + 70, mb.z0 + 98, Math.PI / 2);
     add('marlin', mb.x0 + 55, mb.z0 + 143, -Math.PI / 2, { paint: 0x1a3a8a });
     add('skiff', mb.x0 + 85, mb.z0 + 188, -Math.PI / 2);
-    add('skiff', -1125, -628, Math.PI / 2);
-    add('skiff', -1105, 622, -Math.PI / 2);
+    add('skiff', -1052, -628, Math.PI / 2);
+    add('skiff', -1040, 622, -Math.PI / 2);
     const hp = landmark('helipad');
     add('kestrel', hp.bx, hp.bz, 0, { y: hp.height + 0.16 + 0.3, paint: 0x2a3a5a });
     const hosp = landmark('hospital');

@@ -1,0 +1,273 @@
+[
+  {
+    "id": "m16_oldfriends",
+    "act": 3,
+    "title": "Old Friends",
+    "giver": "theo",
+    "start": { "x": 1113, "z": 355, "radius": 3.5 },
+    "requires": ["m15_brotherskeeper"],
+    "reward": 8000,
+    "hour": 11,
+    "weather": "clear",
+    "summary": "Theo finally agrees to talk — at the Dusty Spoon diner in Dustwater.",
+    "steps": [
+      { "type": "spawnPed", "tag": "theo", "x": 1117, "z": 357, "yaw": -1.57, "app": "story:theo", "state": "sit", "health": 800 },
+      { "type": "cutscene", "shots": [{ "orbit": "theo", "dist": 3.4, "height": 1.5, "angle": 0.9, "dur": 22, "fov": 40 }], "lines": [
+        { "who": "Theo", "text": "I know what you want to do to me. Hear me out first.", "dur": 3.4 },
+        { "who": "Theo", "text": "Westbank was never a robbery. Price needed the vault empty before the auditors came.", "dur": 4.4 },
+        { "who": "Theo", "text": "He paid me to make sure the driver got caught. Dima fronted the money. I took it, and I ran.", "dur": 5 },
+        { "who": "Nico", "text": "Five years, Theo.", "dur": 2 },
+        { "who": "Theo", "text": "I know. The key you found — box 214. Price's ledger is in there. Every payment. Every name.", "dur": 5 },
+        { "who": "Theo", "text": "And Dima's people followed you here.", "dur": 2.6 }
+      ] },
+      { "type": "spawnGroup", "tag": "volk", "count": 6, "x": 1180, "z": 300, "r": 14, "app": "thug", "weapon": "smg", "hostile": true, "health": 90 },
+      { "type": "kill", "tag": "volk", "text": "Take out <b>Dima's crew</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Theo", "text": "I'll get you inside the bank. Price moved the box to the evidence room at HQ last week. Of course he did.", "dur": 5 }
+      ] },
+      { "type": "unlock", "what": "contact", "id": "theo" }
+    ],
+    "fail": [{ "type": "dead", "tag": "theo", "text": "Theo was killed" }]
+  },
+  {
+    "id": "m17_papertrail",
+    "act": 3,
+    "title": "Paper Trail",
+    "giver": "theo",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m16_oldfriends"],
+    "reward": 15000,
+    "hour": 2,
+    "summary": "Break into the Police HQ evidence room, take Price's ledger, and leave by air.",
+    "steps": [
+      { "type": "dialogue", "lines": [
+        { "who": "Juno", "text": "(radio) Shift change at 2 a.m. The evidence room has a loading door on the north side.", "dur": 4.4 },
+        { "who": "Theo", "text": "(radio) Three guards on the back lot. No shooting until you have the ledger.", "dur": 3.8 }
+      ] },
+      { "type": "goto", "x": -265, "z": -175, "radius": 6, "text": "Get to the alley behind <b>Police HQ</b>" },
+      { "type": "checkpoint", "x": -265, "z": -175 },
+      { "type": "spawnPed", "tag": "guards", "x": -290, "z": -152, "yaw": 1.57, "app": "cop", "state": "patrol", "weapon": "pistol" },
+      { "type": "spawnPed", "tag": "guards", "x": -238, "z": -152, "yaw": -1.57, "app": "cop", "state": "patrol", "weapon": "pistol" },
+      { "type": "spawnPed", "tag": "guards", "x": -265, "z": -158, "yaw": 3.14, "app": "cop", "state": "guard", "weapon": "pistol" },
+      { "type": "stealth", "x": -262, "z": -150, "radius": 2.5, "text": "Sneak to the <b>evidence room door</b>", "guards": "guards", "detect": 12 },
+      { "type": "wait", "time": 3 },
+      { "type": "collect", "items": [[-262, -150]], "text": "Take <b>Price's ledger</b>", "tag": "ledger" },
+      { "type": "dialogue", "lines": [{ "who": "Juno", "text": "(radio) Alarm! Somebody tripped a sensor — go, go, go!", "dur": 3 }] },
+      { "type": "pedAction", "tag": "guards", "action": "hostile" },
+      { "type": "wanted", "stars": 4 },
+      { "type": "goto", "x": -355, "z": -180, "radius": 3, "text": "Run to the <b>Skyline Tower</b> lobby", "onFoot": true },
+      { "type": "fadeOut", "time": 0.5 },
+      { "type": "teleport", "x": -347, "z": -197, "y": 72.6, "yaw": 3.14 },
+      { "type": "spawnVehicle", "tag": "heli", "def": "kestrel", "x": -355, "z": -205, "y": 72.7, "yaw": 0, "paint": 2767450, "persistent": true },
+      { "type": "fadeIn", "time": 0.5 },
+      { "type": "enterVehicle", "tag": "heli", "text": "Get in the <b>helicopter</b>" },
+      { "type": "loseWanted", "text": "Lose the <b>police</b>" },
+      { "type": "goto", "x": -160, "z": -690, "radius": 18, "text": "Land behind <b>Lena's garage</b>", "kind": "heli" },
+      { "type": "dialogue", "lines": [
+        { "who": "Theo", "text": "Every name. Price, half the council… and here: 'D. Volk — shipping, Westbank, $2,000,000.'", "dur": 5 },
+        { "who": "Nico", "text": "Dima first.", "dur": 1.8 }
+      ] }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "heli" }]
+  },
+  {
+    "id": "m18_breakwater",
+    "act": 3,
+    "title": "Breakwater",
+    "giver": "theo",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m17_papertrail"],
+    "reward": 15000,
+    "hour": 23,
+    "summary": "Burn Dima's shipment on the docks, then catch his lieutenant before he reaches the open sea.",
+    "steps": [
+      { "type": "give", "weapon": "molotov", "ammo": 6 },
+      { "type": "dialogue", "lines": [
+        { "who": "Theo", "text": "(radio) Three vans on the quay, loaded and ready to ship tonight. Cook them.", "dur": 3.8 }
+      ] },
+      { "type": "goto", "x": -745, "z": -600, "radius": 14, "text": "Get to the <b>docks quay</b>" },
+      { "type": "spawnVehicle", "tag": "shipment", "def": "courier", "x": -770, "z": -620, "yaw": 0, "paint": 3824266, "persistent": true },
+      { "type": "spawnVehicle", "tag": "shipment", "def": "courier", "x": -770, "z": -644, "yaw": 0, "paint": 3824266, "persistent": true },
+      { "type": "spawnVehicle", "tag": "shipment", "def": "courier", "x": -770, "z": -668, "yaw": 0, "paint": 3824266, "persistent": true },
+      { "type": "spawnGroup", "tag": "dockers", "count": 4, "x": -755, "z": -640, "r": 12, "app": "worker", "weapon": "pistol", "hostile": true, "health": 70 },
+      { "type": "help", "text": "Select the <b>Molotov</b> on the weapon wheel and tap <b>✊</b> to throw. Hold <b>◎</b> to aim the arc.", "time": 7 },
+      { "type": "destroy", "tag": "shipment", "text": "Destroy the <b>shipment</b>" },
+      { "type": "checkpoint", "x": -790, "z": -575, "vehicle": "skiff" },
+      { "type": "spawnVehicle", "tag": "lt", "def": "marlin", "x": -840, "z": -540, "yaw": -2.2, "driver": "thug", "paint": 1052688, "persistent": true },
+      { "type": "spawnVehicle", "tag": "myboat", "def": "skiff", "x": -812, "z": -575, "yaw": -1.57, "paint": 14737632, "persistent": true },
+      { "type": "dialogue", "lines": [{ "who": "Nico", "text": "Volk's lieutenant — he's heading for open water!", "dur": 3 }] },
+      { "type": "enterAny", "text": "Get in a <b>boat</b>", "kind": "boat" },
+      { "type": "chase", "tag": "lt", "text": "Catch the <b>lieutenant</b>", "route": [[-860, -540], [-950, -620], [-1050, -700], [-1150, -760], [-1280, -800], [-1400, -760]], "speed": 22, "catchDist": 10, "maxDist": 240 },
+      { "type": "pedAction", "tag": "lt", "action": "hostile" },
+      { "type": "destroy", "tag": "lt", "text": "Sink the <b>Marlin</b>" },
+      { "type": "dialogue", "lines": [{ "who": "Theo", "text": "(radio) Dima just lost a year of profit. He'll come after Sal. He always goes for the old ones.", "dur": 4.4 }] }
+    ]
+  },
+  {
+    "id": "m19_salslastride",
+    "act": 3,
+    "title": "Sal's Last Ride",
+    "giver": "sal",
+    "start": { "x": 1180, "z": 362, "radius": 3.5 },
+    "requires": ["m18_breakwater"],
+    "reward": 14000,
+    "hour": 18,
+    "summary": "Dima's crew rolls into Dustwater to make an example of Sal. Hold the town.",
+    "steps": [
+      { "type": "spawnPed", "tag": "sal", "x": 1184, "z": 362, "yaw": 3.14, "app": "story:sal", "state": "talk", "health": 900 },
+      { "type": "dialogue", "lines": [
+        { "who": "Sal", "text": "Trucks on the Mesa Loop, coming in hot. Dima wants a show.", "dur": 3.6 },
+        { "who": "Sal", "text": "The old Longshot's in my truck. You remember how I taught you to breathe?", "dur": 3.8 },
+        { "who": "Nico", "text": "In, out, squeeze.", "dur": 1.8 }
+      ] },
+      { "type": "give", "weapon": "sniper", "ammo": 30 },
+      { "type": "armor", "amount": 100 },
+      { "type": "pedAction", "tag": "sal", "action": "cower" },
+      { "type": "help", "text": "Hold <b>◎</b> to look down the scope. Aim assist is reduced for snipers — line up headshots.", "time": 7 },
+      { "type": "checkpoint", "x": 1180, "z": 350 },
+      { "type": "survive", "time": 90, "text": "Hold <b>Dustwater</b>", "waves": [
+        { "at": 0, "tag": "raid", "count": 4, "x": 1300, "z": 300, "r": 10, "app": "thug", "weapon": "smg", "vehicle": "mule" },
+        { "at": 20, "tag": "raid", "count": 4, "x": 1230, "z": 440, "r": 10, "app": "thug", "weapon": "rifle", "vehicle": "ranger" },
+        { "at": 45, "tag": "raid", "count": 5, "x": 1080, "z": 420, "r": 10, "app": "thug", "weapon": "shotgun" },
+        { "at": 65, "tag": "raid", "count": 4, "x": 1300, "z": 330, "r": 10, "app": "biker", "weapon": "smg", "vehicle": "thunder" }
+      ] },
+      { "type": "kill", "tag": "raid", "text": "Finish off the <b>raiders</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Sal", "text": "Took one in the shoulder. I'll live — I'm too ornery to die in my own town.", "dur": 4 },
+        { "who": "Sal", "text": "Price keeps a villa on Pelican Isle. That's where he'll run. End it, Nico.", "dur": 4 }
+      ] }
+    ],
+    "fail": [{ "type": "dead", "tag": "sal", "text": "Sal was killed" }]
+  },
+  {
+    "id": "m20_pelicanisle",
+    "act": 3,
+    "title": "Pelican Isle",
+    "giver": "theo",
+    "start": { "x": -700, "z": 560, "radius": 3.5 },
+    "requires": ["m19_salslastride"],
+    "reward": 20000,
+    "hour": 6,
+    "weather": "fog",
+    "summary": "Storm Price's island villa at dawn and take the copy of the ledger he keeps there.",
+    "steps": [
+      { "type": "spawnVehicle", "tag": "boat", "def": "marlin", "x": -775, "z": 640, "yaw": -1.5708, "paint": 1052688, "persistent": true },
+      { "type": "dialogue", "lines": [{ "who": "Theo", "text": "(radio) Fog's our friend. Go in by the pier. I'll be on the radio — I'm a coward, not an idiot.", "dur": 4.4 }] },
+      { "type": "give", "weapon": "rifle", "ammo": 240 },
+      { "type": "give", "weapon": "grenade", "ammo": 4 },
+      { "type": "enterVehicle", "tag": "boat", "text": "Take the <b>boat</b>" },
+      { "type": "goto", "x": -1045, "z": 612, "radius": 16, "text": "Land at the <b>Pelican Isle pier</b>", "kind": "boat" },
+      { "type": "checkpoint", "x": -1100, "z": 612 },
+      { "type": "spawnGroup", "tag": "guards", "count": 10, "x": -1170, "z": 640, "r": 28, "app": "swat", "weapon": "rifle", "hostile": true, "health": 110, "armor": 40 },
+      { "type": "kill", "tag": "guards", "text": "Clear <b>Price's villa</b>" },
+      { "type": "collect", "items": [[-1180, 648]], "text": "Find the <b>ledger copy</b>", "tag": "ledger" },
+      { "type": "dialogue", "lines": [
+        { "who": "Theo", "text": "(radio) That's it. Two copies, one fire, Price is finished either way.", "dur": 3.8 },
+        { "who": "Juno", "text": "(radio) Uh, guys? Price just landed at the lighthouse. And he has Lena.", "dur": 3.8 }
+      ] }
+    ]
+  },
+  {
+    "id": "m21_thechoice",
+    "act": 3,
+    "title": "The Choice",
+    "giver": "theo",
+    "start": { "x": -1100, "z": 612, "radius": 6 },
+    "requires": ["m20_pelicanisle"],
+    "reward": 0,
+    "hour": 7,
+    "weather": "clear",
+    "summary": "The lighthouse. Price, Theo, Lena — and the ledger in your hand.",
+    "steps": [
+      { "type": "goto", "x": -1296, "z": 576, "radius": 6, "text": "Go to the <b>lighthouse</b>", "onFoot": true },
+      { "type": "spawnPed", "tag": "price", "x": -1302, "z": 580, "yaw": 0.6, "app": "story:price", "state": "idle", "weapon": "pistol", "health": 9999 },
+      { "type": "spawnPed", "tag": "lena", "x": -1306, "z": 582, "yaw": 0.6, "app": "story:lena", "state": "cower", "health": 9999 },
+      { "type": "spawnPed", "tag": "theo", "x": -1288, "z": 572, "yaw": -2.4, "app": "story:theo", "state": "idle", "health": 9999 },
+      { "type": "cutscene", "shots": [{ "orbit": "price", "dist": 5, "height": 2, "angle": 0.8, "dur": 12, "fov": 38 }, { "orbit": "theo", "dist": 3.4, "height": 1.7, "angle": -0.4, "dur": 10, "fov": 40 }], "lines": [
+        { "who": "Price", "text": "The ledger for your sister, Reyes. Simple trade.", "dur": 3.4 },
+        { "who": "Theo", "text": "There's a federal boat off the point. Juno called them. Hand it over and Price is done — legally.", "dur": 5 },
+        { "who": "Price", "text": "Or kill me and take the coast. Dima's finished, the docks are empty. Somebody has to run Port Solano.", "dur": 5 },
+        { "who": "Lena", "text": "Nico… don't become them.", "dur": 2.6 }
+      ] },
+      { "type": "choice", "text": "What does Nico do?", "options": [
+        { "label": "📜 Hand the ledger to the feds", "flag": "ending", "value": "A" },
+        { "label": "🔫 Kill Price, take the coast", "flag": "ending", "value": "B" }
+      ] },
+      { "type": "despawn", "tag": "price" },
+      { "type": "despawn", "tag": "lena" },
+      { "type": "despawn", "tag": "theo" },
+      { "type": "branch", "flag": "ending", "value": "A", "mission": "m22a_cleangetaway" },
+      { "type": "branch", "flag": "ending", "value": "B", "mission": "m22b_kingofthecoast" }
+    ]
+  },
+  {
+    "id": "m22a_cleangetaway",
+    "act": 3,
+    "title": "Clean Getaway",
+    "giver": "lena",
+    "start": { "x": -1100, "z": 612, "radius": 6 },
+    "requires": ["m21_thechoice"],
+    "requiresFlag": { "flag": "ending", "value": "A" },
+    "reward": 50000,
+    "hour": 8,
+    "ending": "A",
+    "summary": "The feds have the ledger. Every dirty cop in Port Solano wants you dead before the arrests. Get Lena out.",
+    "steps": [
+      { "type": "fadeOut", "time": 0.8 },
+      { "type": "teleport", "x": -160, "z": 588, "yaw": 0, "vehicle": "ranger" },
+      { "type": "spawnPed", "tag": "lena", "x": -164, "z": 584, "yaw": 0, "app": "story:lena", "state": "idle", "health": 500 },
+      { "type": "fadeIn", "time": 0.8 },
+      { "type": "dialogue", "lines": [
+        { "who": "Juno", "text": "(radio) The feds are rolling up Price's people, but his loyalists put out an all-units on you two.", "dur": 4.6 },
+        { "who": "Lena", "text": "Route 9. Out past Dustwater. Sal said the state line's quiet this time of year.", "dur": 4 }
+      ] },
+      { "type": "pedAction", "tag": "lena", "action": "enterPlayerVehicle" },
+      { "type": "wanted", "stars": 5, "lock": true },
+      { "type": "escort", "tag": "lena", "x": 1540, "z": 120, "radius": 25, "text": "Get <b>Lena</b> out across <b>Route 9</b>" },
+      { "type": "fadeOut", "time": 2 },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "We made it. Nico… what now?", "dur": 3 },
+        { "who": "Nico", "text": "Now we drive. For once, nobody's chasing us.", "dur": 3.2 }
+      ] }
+    ],
+    "fail": [{ "type": "dead", "tag": "lena", "text": "Lena was killed" }]
+  },
+  {
+    "id": "m22b_kingofthecoast",
+    "act": 3,
+    "title": "King of the Coast",
+    "giver": "theo",
+    "start": { "x": -1100, "z": 612, "radius": 6 },
+    "requires": ["m21_thechoice"],
+    "requiresFlag": { "flag": "ending", "value": "B" },
+    "reward": 100000,
+    "hour": 8,
+    "ending": "B",
+    "summary": "Price dies at the lighthouse. Now take the docks from Dmitri Volk — permanently.",
+    "steps": [
+      { "type": "spawnPed", "tag": "price", "x": -1302, "z": 580, "yaw": 0.6, "app": "story:price", "state": "idle", "weapon": "pistol", "hostile": true, "health": 160, "armor": 50 },
+      { "type": "spawnGroup", "tag": "loyal", "count": 4, "x": -1290, "z": 590, "r": 12, "app": "cop", "weapon": "smg", "hostile": true },
+      { "type": "kill", "tag": "price", "text": "Kill <b>Captain Price</b>" },
+      { "type": "kill", "tag": "loyal", "text": "Deal with Price's <b>loyalists</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "(leaving) I'm taking the boat. Don't call me, Nico.", "dur": 3.2 },
+        { "who": "Theo", "text": "(radio) Dima's barricaded in the Volk yard. Finish it and the docks are yours.", "dur": 4 }
+      ] },
+      { "type": "spawnVehicle", "tag": "boat", "def": "marlin", "x": -1042, "z": 616, "yaw": 1.57, "paint": 1052688, "persistent": true },
+      { "type": "goto", "x": -593, "z": -770, "radius": 14, "text": "Get to the <b>Volk Shipping yard</b>" },
+      { "type": "checkpoint", "x": -593, "z": -775 },
+      { "type": "survive", "time": 60, "text": "Fight through <b>Volk's crew</b>", "waves": [
+        { "at": 0, "tag": "crew", "count": 5, "x": -600, "z": -710, "r": 16, "app": "thug", "weapon": "rifle" },
+        { "at": 20, "tag": "crew", "count": 4, "x": -620, "z": -650, "r": 12, "app": "worker", "weapon": "shotgun" },
+        { "at": 40, "tag": "crew", "count": 4, "x": -593, "z": -820, "r": 12, "app": "thug", "weapon": "smg", "vehicle": "ranger" }
+      ] },
+      { "type": "spawnPed", "tag": "dima", "x": -612, "z": -700, "yaw": 1.57, "app": "story:dima", "state": "guard", "weapon": "shotgun", "hostile": true, "health": 300, "armor": 100 },
+      { "type": "kill", "tag": "dima", "text": "Kill <b>Dmitri Volk</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Theo", "text": "(radio) It's done. The docks, the cops, the city. It's yours, King of the Coast.", "dur": 4.2 },
+        { "who": "Nico", "text": "Five years for a job I didn't plan. Now I'm the one making the plans.", "dur": 4 }
+      ] },
+      { "type": "fadeOut", "time": 2 }
+    ]
+  }
+]

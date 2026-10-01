@@ -216,9 +216,8 @@ export class VehicleController {
       // while waiting to get out: handbrake only (the foot brake turns into reverse when slow)
       v.throttle = this.pendingExit ? 0 : gas;
       v.brake = this.pendingExit ? 0 : brake;
-      if (this.pendingExit) v.handbrake = true;
       v.steer = clamp(inp.moveX, -1, 1);
-      v.handbrake = inp.down('handbrake') && inp.lastDevice !== 'keyboard' ? true : inp.down('handbrake');
+      v.handbrake = this.pendingExit || inp.down('handbrake');
     }
     if (inp.pressed('horn')) v.hornT = 0.25;
     v.horn = inp.down('horn');
@@ -229,7 +228,11 @@ export class VehicleController {
       if (v.kind !== 'heli') g.cam.mode = this.hood ? 'hood' : 'vehicle';
     }
     if (v.def.siren && inp.pressed('horn') && inp.down('handbrake')) v.siren = !v.siren;
-    if (inp.pressed('enter')) this.exit();
+    if (inp.pressed('enter')) {
+      // the same tap must not also re-enter the car we just stepped out of (update() checks 'enter')
+      inp.consume('enter');
+      this.exit();
+    }
     if (this.pendingExit) {
       this.pendingExitT += dt;
       // something keeps the car rolling (slope, traffic, a ram): get out anyway

@@ -20,6 +20,15 @@ interface ButtonDef {
 }
 
 const B = (d: ButtonDef): ButtonDef => d;
+
+/** Pointer capture can throw (pointer already gone, some WebViews); a button must still work. */
+function capture(el: Element, id: number): void {
+  try {
+    el.setPointerCapture(id);
+  } catch {
+    /* ignore */
+  }
+}
 export const TOUCH_BUTTONS: ButtonDef[] = [
   // on foot (right-thumb cluster, measured from the bottom-right corner)
   B({ id: 'sprint', action: 'sprint', label: '»', right: 22, bottom: 22, size: 70, modes: ['foot'] }),
@@ -166,13 +175,13 @@ export class TouchControls {
       if (this.editMode) {
         const off = this.settings.data.hud.offsets[def.id] ?? [0, 0];
         drag = { x: e.clientX, y: e.clientY, ox: off[0], oy: off[1] };
-        el.setPointerCapture(e.pointerId);
+        capture(el, e.pointerId);
         return;
       }
       pid = e.pointerId;
-      el.setPointerCapture(e.pointerId);
       el.classList.add('down');
       this.input.setAction(def.action, true, SOURCE_TOUCH);
+      capture(el, e.pointerId);
       this.input.lastDevice = 'touch';
       if (this.settings.data.haptics) navigator.vibrate?.(8);
     });

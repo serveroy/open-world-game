@@ -55,6 +55,10 @@ export class Input {
   released(a: Action): boolean {
     return this.releasedSet.has(a);
   }
+  /** Swallow this frame's press of `a` so no other system reacts to the same tap. */
+  consume(a: Action): void {
+    this.pressedSet.delete(a);
+  }
   /** Mark that gameplay consumed the edge flags (called after a fixed step). */
   markConsumed(): void {
     this.consumed = true;

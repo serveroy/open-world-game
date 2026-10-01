@@ -80,7 +80,7 @@ export class Interactions implements System {
       const usable = inVeh ? !!ip.inVehicle : ip.onFoot !== false;
       if (ip.beacon !== false && (!g.missions?.active)) {
         const y = g.world ? Math.max(g.world.groundY(ix, iz), 0.16) : 0;
-        this.markers.beacon(ix, y, iz, inVeh && ip.inVehicle ? Math.max(ip.r * 0.7, 2) : 0.9, ip.color ?? 0x7dc3ff, inVeh && ip.inVehicle ? 5 : 2.2);
+        this.markers.beacon(ix, y, iz, inVeh && ip.inVehicle ? Math.min(2.6, Math.max(ip.r * 0.55, 1.6)) : 0.9, ip.color ?? 0x7dc3ff, inVeh && ip.inVehicle ? 3.2 : 2.2);
       }
       if (!usable || busy) continue;
       if (d < ip.r && d < bd) {
@@ -101,7 +101,10 @@ export class Interactions implements System {
       this.shownHtml = label ? `${g.input.lastDevice === 'touch' ? 'Tap <b>' + button + '</b>' : g.input.lastDevice === 'gamepad' ? 'Press <b>X</b>' : 'Press <b>E</b>'} — ${label}` : '';
       if (label) g.hud.showHelp(this.shownHtml, 999);
     }
-    if (!g.theft?.busy) g.touch.setContext('interact', !!best, button);
+    if (!g.theft?.busy) {
+      g.touch.setContext('interact', !!best && !inVeh, button);
+      g.touch.setContext('vinteract', !!best && inVeh, button);
+    }
     if (best && g.input.pressed('interact')) {
       g.hud.clearHelpIf(this.shownHtml);
       this.shown = this.shownHtml = '';

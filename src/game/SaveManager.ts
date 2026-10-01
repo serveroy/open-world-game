@@ -65,6 +65,7 @@ export class SaveManager implements System {
       stats: { ...g.stats.save(), earned: g.wallet.totalEarned + g.stats.get('earnedBase'), spent: g.wallet.totalSpent + g.stats.get('spentBase') },
       activities: g.activities?.save() ?? {},
       wardrobe: [...(g.shops?.wardrobe ?? [])],
+      vehicle: v && !v.destroyed && !v.tag ? { def: v.def.id, paint: v.paint, mods: { ...v.mods }, health: v.health.fraction, yaw: v.yaw } : null,
     };
   }
 
@@ -96,6 +97,19 @@ export class SaveManager implements System {
     const ok = Number.isFinite(d.player.x) && Number.isFinite(d.player.z) && Math.abs(d.player.x) < 1600 && Math.abs(d.player.z) < 1200;
     const x = ok ? d.player.x : SPAWNS.start.x, z = ok ? d.player.z : SPAWNS.start.z;
     g.teleport(x, z, d.player.yaw);
+    const sv = d.vehicle;
+    if (ok && sv && g.vehicles && g.vctrl) {
+      try {
+        const nv = g.vehicles.spawn(sv.def, x, z, sv.yaw, { paint: sv.paint, role: 'player' });
+        nv.mods = { ...sv.mods };
+        nv.health.health = nv.health.max * Math.max(0.25, sv.health);
+        nv.persistent = true;
+        g.vctrl.enter(nv, true);
+        g.cam.snapBehind(sv.yaw);
+      } catch {
+        /* unknown vehicle id in an old save: stay on foot */
+      }
+    }
     this.enabled = true;
   }
 

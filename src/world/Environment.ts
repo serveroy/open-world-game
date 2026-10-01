@@ -31,6 +31,8 @@ export class Environment {
   private sandU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uAmt: { value: 0 } };
   readonly sunDir = new THREE.Vector3(0, 1, 0);
   night = 0;
+  /** Temporary exposure multiplier (shop preview cameras). */
+  exposureBoost = 1;
   /** Desert factor of the focus point (0 city … 1 deep desert). */
   desert = 0;
   private skyZenith = new THREE.Color();
@@ -224,7 +226,7 @@ export class Environment {
     }
     this.fog.near = fogNear;
     this.fog.far = Math.max(fogNear + 20, fogFar);
-    renderer.toneMappingExposure = lerp(1.0, 1.25, n);
+    renderer.toneMappingExposure = lerp(1.0, 1.25, n) * this.exposureBoost;
 
     // world shader uniforms
     worldUniforms.uNight.value = smoothstep(0.15, 0.85, n) + (wp.cloud > 0.85 ? 0.15 : 0);

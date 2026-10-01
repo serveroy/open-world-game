@@ -102,6 +102,7 @@ export class VehicleController {
     const fast = Math.abs(v.speed) > 7 && v.kind !== 'heli';
     if (!force && !fast && v.kind !== 'boat' && v.kind !== 'heli' && Math.abs(v.speed) > 2) {
       // slow down first; exit when nearly stopped
+      if (!this.pendingExit) this.pendingExitT = 0;
       this.pendingExit = true;
       return;
     }
@@ -149,6 +150,8 @@ export class VehicleController {
     g.events.emit('vehicleExited', { vehicle: v });
   }
   pendingExit = false;
+  /** Seconds spent waiting to stop before an exit (forced after a moment). */
+  private pendingExitT = 0;
 
   fixedUpdate(dt: number): void {
     const g = this.game;
@@ -210,8 +213,10 @@ export class VehicleController {
       v.steer = clamp(inp.moveX, -1, 1);
       v.throttle = 0;
     } else {
+      // while waiting to get out: handbrake only (the foot brake turns into reverse when slow)
       v.throttle = this.pendingExit ? 0 : gas;
-      v.brake = this.pendingExit ? 1 : brake;
+      v.brake = this.pendingExit ? 0 : brake;
+      if (this.pendingExit) v.handbrake = true;
       v.steer = clamp(inp.moveX, -1, 1);
       v.handbrake = inp.down('handbrake') && inp.lastDevice !== 'keyboard' ? true : inp.down('handbrake');
     }
@@ -225,7 +230,11 @@ export class VehicleController {
     }
     if (v.def.siren && inp.pressed('horn') && inp.down('handbrake')) v.siren = !v.siren;
     if (inp.pressed('enter')) this.exit();
-    if (this.pendingExit && Math.abs(v.speed) < 1.5) this.exit(true);
+    if (this.pendingExit) {
+      this.pendingExitT += dt;
+      // something keeps the car rolling (slope, traffic, a ram): get out anyway
+      if (Math.abs(v.speed) < 1.5 || this.pendingExitT > 1.1) this.exit(true);
+    }
     // auto lights at night for the player too
     if (g.env && g.env.night > 0.4 && !v.lights && v.engineOn) v.lights = true;
   }

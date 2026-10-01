@@ -24,6 +24,8 @@ export class Input {
   /** Swipe gesture X this frame (touch target switching), pixels. */
   swipeX = 0;
   lastDevice: InputDevice = 'keyboard';
+  /** Set by the game each frame: player is driving (changes gamepad trigger mapping). */
+  inVehicle = false;
 
   private held = new Map<Action, number>(); // action → source bitmask
   private pressedSet = new Set<Action>();

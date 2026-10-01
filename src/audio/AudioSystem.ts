@@ -5,6 +5,8 @@ import type { Vehicle } from '../vehicles/Vehicle';
 import { SfxBank } from './Sfx';
 import { Radio } from './Radio';
 import { STATIONS } from './music';
+import { SpeechVoice, speakerFor } from './Voice';
+import { encodeWav, toDataUri } from './wav';
 import { coastX, districtAt } from '../world/MapData';
 import type { Ped } from '../peds/Ped';
 import { sirensQ, syncTags, vehiclesQ } from '../ecs/world';
@@ -187,16 +189,21 @@ export class AudioSystem implements System {
   private inClub = false;
   private started = false;
   private t = 0;
+  readonly voice = new SpeechVoice();
+  private silentEl: HTMLAudioElement | null = null;
+  private babbleUntil = 0;
 
   constructor(private game: Game) {
     this.station = game.settings.data.radioStation >= 3 ? -1 : game.settings.data.radioStation;
+    // capture phase: UI buttons stop propagation, but every tap must be able to unlock audio
     const unlock = (): void => {
       this.init();
-      void this.ctx?.resume?.();
+      this.iosPlayback();
+      this.voice.prime();
+      if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume().catch(() => undefined);
     };
-    addEventListener('pointerdown', unlock);
-    addEventListener('keydown', unlock);
-    addEventListener('touchend', unlock);
+    for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) addEventListener(ev, unlock, { capture: true, passive: true });
+    game.hud.onSubtitle = (who, text, secs) => this.say(who, text, secs);
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
@@ -263,6 +270,100 @@ export class AudioSystem implements System {
       this.sfxBus.gain.setTargetAtTime(st.sfxVolume, ctx.currentTime, 0.05);
       this.musicBus.gain.setTargetAtTime(st.musicVolume, ctx.currentTime, 0.05);
     });
+  }
+
+  /**
+   * iOS mutes Web Audio while the ringer switch is on silent. Declaring a playback session
+   * (Safari 16.4+) or playing a looping silent <audio> element moves the page to the media
+   * channel so game audio plays like a video would.
+   */
+  private iosPlayback(): void {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    try {
+      if (nav.audioSession && nav.audioSession.type !== 'playback') nav.audioSession.type = 'playback';
+    } catch {
+      /* ignore */
+    }
+    if (this.silentEl || !/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) || !('ontouchend' in document)) return;
+    try {
+      const el = new Audio(toDataUri(encodeWav(new Float32Array(4410), 8820)));
+      el.loop = true;
+      el.setAttribute('playsinline', '');
+      void el.play().catch(() => undefined);
+      this.silentEl = el;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Voice a subtitle line: device speech when available, synthetic babble otherwise. */
+  say(who: string | null, text: string | null, secs: number): void {
+    if (!text) {
+      this.voice.cancel();
+      return;
+    }
+    const mode = this.game.settings.data.voice;
+    if (mode === 'off') return;
+    const s = speakerFor(who);
+    const vol = this.game.settings.data.masterVolume * this.game.settings.data.sfxVolume;
+    if (mode === 'speech' && this.voice.speak(text, s, vol)) return;
+    this.babble(text, s.female, s.seed, Math.min(secs, 0.25 + text.length * 0.06));
+  }
+
+  get speaking(): boolean {
+    return this.voice.speaking || (this.ctx ? this.ctx.currentTime < this.babbleUntil : false);
+  }
+
+  /** Gibberish "voice": formant-filtered syllables with a speaker-specific pitch. */
+  private babble(text: string, female: boolean, seed: number, dur: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.started) return;
+    const t0 = ctx.currentTime + 0.02;
+    const syl = Math.max(2, Math.round(text.replace(/[^a-z]/gi, '').length / 3.2));
+    const step = Math.min(0.16, dur / syl);
+    const f0 = female ? 195 + seed * 60 : 100 + seed * 45;
+    const out = ctx.createGain();
+    out.gain.value = 0.16;
+    out.connect(this.sfxBus);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    const f1 = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter();
+    f1.type = f2.type = 'bandpass';
+    f1.Q.value = 6;
+    f2.Q.value = 8;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    o.connect(f1).connect(g);
+    o.connect(f2).connect(g);
+    g.connect(out);
+    const vowels = [[730, 1090], [530, 1840], [270, 2290], [570, 840], [440, 1020], [660, 1720]] as const;
+    for (let i = 0; i < syl; i++) {
+      const t = t0 + i * step;
+      const v = vowels[(i * 7 + Math.floor(seed * 13) + text.charCodeAt(i % text.length)) % vowels.length]!;
+      const k = female ? 1.18 : 1;
+      f1.frequency.setValueAtTime(v[0] * k, t);
+      f2.frequency.setValueAtTime(v[1] * k, t);
+      const end = i === syl - 1 ? 0.82 : 1;
+      o.frequency.setValueAtTime(f0 * (1.05 + 0.12 * Math.sin(i * 1.7 + seed * 6)), t);
+      o.frequency.linearRampToValueAtTime(f0 * end, t + step * 0.8);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.9, t + step * 0.2);
+      g.gain.linearRampToValueAtTime(0, t + step * 0.75);
+    }
+    o.start(t0);
+    o.stop(t0 + syl * step + 0.05);
+    this.babbleUntil = t0 + syl * step;
+  }
+
+  /** Settings → Audio → Test: a short sting, a radio blip and a spoken line. */
+  test(): void {
+    this.init();
+    this.iosPlayback();
+    void this.ctx?.resume();
+    setTimeout(() => {
+      this.ui('passed', 0.8);
+      this.say('Lena', 'Sound check. If you can hear me, the audio works.', 3);
+    }, 120);
   }
 
   private loopNoise(type: BiquadFilterType, f: number, q: number): GainNode {

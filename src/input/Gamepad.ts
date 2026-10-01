@@ -33,14 +33,19 @@ export class GamepadSource {
     const lt = gp.buttons[6]?.value ?? 0, rt = gp.buttons[7]?.value ?? 0;
     this.input.throttle = rt;
     this.input.brakeAxis = lt;
-    this.input.setAction('aim', lt > 0.3, SOURCE_GAMEPAD);
-    this.input.setAction('attack', rt > 0.3, SOURCE_GAMEPAD);
+    // In vehicles the triggers are pedals only; drive-by fire moves to Y (aim follows the shot).
+    const driving = this.input.inVehicle;
+    this.input.setAction('aim', !driving && lt > 0.3, SOURCE_GAMEPAD);
+    this.input.setAction('attack', driving ? !!gp.buttons[3]?.pressed : rt > 0.3, SOURCE_GAMEPAD);
     this.input.setAction('gas', rt > 0.1, SOURCE_GAMEPAD);
     this.input.setAction('brake', lt > 0.1, SOURCE_GAMEPAD);
     this.input.setAction('handbrake', !!gp.buttons[5]?.pressed, SOURCE_GAMEPAD);
     this.input.setAction('ascend', !!gp.buttons[5]?.pressed, SOURCE_GAMEPAD);
     this.input.setAction('descend', !!gp.buttons[4]?.pressed, SOURCE_GAMEPAD);
-    for (const [i, a] of BUTTONS) this.input.setAction(a, !!gp.buttons[i]?.pressed, SOURCE_GAMEPAD);
+    for (const [i, a] of BUTTONS) {
+      if (driving && i === 3) continue; // Y = drive-by while driving
+      this.input.setAction(a, !!gp.buttons[i]?.pressed, SOURCE_GAMEPAD);
+    }
   }
   rumble(intensity: number, ms: number): void {
     const gp = navigator.getGamepads?.().find((p) => p && p.connected) as (Gamepad & { vibrationActuator?: { playEffect: (t: string, o: object) => Promise<unknown> } }) | undefined;

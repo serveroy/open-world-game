@@ -425,7 +425,9 @@ export class MissionManager implements System, MissionHost {
   private showLine(): void {
     const l = this.dialogueLines[this.lineI];
     if (!l) return;
-    if (this.game.settings.data.subtitles || this.cutscene) this.game.hud.subtitleText(l.who, l.text, (l.dur ?? 1.2 + l.text.length * 0.055) + 0.3);
+    const secs = (l.dur ?? 1.2 + l.text.length * 0.055) + 0.3;
+    if (this.game.settings.data.subtitles || this.cutscene) this.game.hud.subtitleText(l.who, l.text, secs);
+    else this.game.audio.say(l.who, l.text, secs);
   }
 
   private skipLine(): void {
@@ -838,7 +840,10 @@ export class MissionManager implements System, MissionHost {
       const l = this.dialogueLines[this.lineI];
       const dur = l ? (l.dur ?? 1.2 + l.text.length * 0.055) : 0;
       if (g.input.pressed('skip') || (this.cutscene && g.input.pressed('attack'))) this.lineT = 99;
-      if (!l || this.lineT >= dur) {
+      // let a spoken line finish (up to 2.5× its subtitle time) before moving on
+      const talking = !!l && g.audio.speaking && this.lineT < dur * 2.5 && this.lineT < 99;
+      if (talking) g.hud.extendSubtitle(0.4);
+      if (!l || (this.lineT >= dur && !talking)) {
         this.lineI++;
         this.lineT = 0;
         if (this.lineI >= this.dialogueLines.length) this.endDialogue();

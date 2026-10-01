@@ -99,6 +99,12 @@ export class Hud {
     void rot;
   }
 
+  /** Bottom edge (px) of the top-right HUD block, for touch-button fitting. */
+  topRightBottom(): number {
+    const tr = this.clock.parentElement!.getBoundingClientRect();
+    return tr.height > 0 ? tr.bottom : 64;
+  }
+
   private setText(key: string, e: HTMLElement, v: string): void {
     if (this.cache.get(key) !== v) {
       this.cache.set(key, v);
@@ -240,7 +246,16 @@ export class Hud {
     this.bigTimer = seconds;
   }
 
+  /** Called for every subtitle line (audio voices it). */
+  onSubtitle: ((who: string | null, text: string | null, seconds: number) => void) | null = null;
+
+  /** Keep the current subtitle up a little longer (while the line is still being spoken). */
+  extendSubtitle(seconds: number): void {
+    if (this.subTimer > 0) this.subTimer = Math.max(this.subTimer, seconds);
+  }
+
   subtitleText(who: string | null, text: string | null, seconds = 4): void {
+    this.onSubtitle?.(who, text, seconds);
     if (!text) {
       this.subtitle.style.display = 'none';
       this.subTimer = 0;

@@ -14,4 +14,6 @@ export const params = {
   autoplay: q.get('autoplay') === '1',
   /** Skip the title screen (tests / screenshots). */
   skipTitle: q.get('play') === '1',
+  /** Force the in-app-frame layout (header inset) for testing. */
+  framed: q.get('framed') === '1',
 };

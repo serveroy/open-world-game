@@ -81,10 +81,19 @@ export class Respawn {
     const handled = this.intercept?.(kind) ?? false;
     if (!handled) {
       if (kind === 'wasted') {
-        const fee = g.wallet.take(Math.min(500, g.wallet.cash), 'Hospital bill');
         const sp = SPAWNS.hospital;
-        g.teleport(sp.x, sp.z, sp.yaw);
-        g.hud.toast(`Solano General patched you up. Bill: $${fee}`, 4000);
+        const at = { x: p.pos.x, z: p.pos.z };
+        const home = g.saves.nearestSafehouse(at.x, at.z);
+        if (home && Math.hypot(home.x - at.x, home.z - at.z) < Math.hypot(sp.x - at.x, sp.z - at.z)) {
+          // a closer safehouse: a street medic patches you up at home for a smaller fee
+          const fee = g.wallet.take(Math.min(250, g.wallet.cash), 'Medic house call');
+          g.teleport(home.x, home.z, home.yaw);
+          g.hud.toast(`A medic patched you up at your safehouse. Fee: $${fee}`, 4000);
+        } else {
+          const fee = g.wallet.take(Math.min(500, g.wallet.cash), 'Hospital bill');
+          g.teleport(sp.x, sp.z, sp.yaw);
+          g.hud.toast(`Solano General patched you up. Bill: $${fee}`, 4000);
+        }
       } else {
         const fine = g.wallet.take(Math.min(5000, Math.floor(g.wallet.cash * 0.1)), 'Bail');
         g.combat?.arsenal.strip();

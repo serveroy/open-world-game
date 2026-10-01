@@ -11,15 +11,26 @@ import { DeliveryJob } from '../activities/Jobs';
 type App = 'home' | 'map' | 'missions' | 'contacts' | 'stats' | 'property' | 'call';
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
+const svg = (d: string): string => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONS = {
+  map: svg('<path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5V4l-6 2.5L9 4Z"/><path d="M9 4v13M15 6.5v13"/>'),
+  missions: svg('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M8.5 10h7M8.5 14h7M8.5 18h4"/>'),
+  contacts: svg('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.9-3.6 3.7-5.5 7-5.5s6.1 1.9 7 5.5"/>'),
+  property: svg('<path d="M4 11 12 4l8 7"/><path d="M6.5 9.5V20h11V9.5"/><path d="M10 20v-5h4v5"/>'),
+  stats: svg('<path d="M4 20h16"/><path d="M7 20v-6M12 20V8M17 20v-9"/>'),
+  save: svg('<path d="M5 4h11l3 3v13H5Z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>'),
+  settings: svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>'),
+};
 const APPS: { id: App | 'settings' | 'save'; name: string; icon: string; color: string }[] = [
-  { id: 'map', name: 'Maps', icon: '🗺️', color: '#2a7a5a' },
-  { id: 'missions', name: 'Jobs', icon: '📋', color: '#c83a4a' },
-  { id: 'contacts', name: 'Contacts', icon: '👥', color: '#3a6ac8' },
-  { id: 'property', name: 'Property', icon: '🏠', color: '#c8902a' },
-  { id: 'stats', name: 'Stats', icon: '📊', color: '#7a3ac8' },
-  { id: 'save', name: 'Save', icon: '💾', color: '#2a8ac8' },
-  { id: 'settings', name: 'Settings', icon: '⚙️', color: '#555566' },
+  { id: 'map', name: 'Maps', icon: ICONS.map, color: '#1f8a6a' },
+  { id: 'missions', name: 'Jobs', icon: ICONS.missions, color: '#c8343f' },
+  { id: 'contacts', name: 'Contacts', icon: ICONS.contacts, color: '#3563c8' },
+  { id: 'property', name: 'Property', icon: ICONS.property, color: '#c88a1e' },
+  { id: 'stats', name: 'Stats', icon: ICONS.stats, color: '#7a3ac8' },
+  { id: 'save', name: 'Save', icon: ICONS.save, color: '#1e86b8' },
+  { id: 'settings', name: 'Settings', icon: ICONS.settings, color: '#4b4b5c' },
 ];
+const TITLES: Record<App, string> = { home: '', map: 'Maps', missions: 'Jobs', contacts: 'Contacts', stats: 'Stats', property: 'Property', call: 'Calling…' };
 
 const CALL_LINES: Record<string, string[]> = {
   lena: ['Car trouble? Bring it by the shop. And Nico — be careful.', 'There is always something on the contract board out back.'],
@@ -49,8 +60,9 @@ export class Phone {
   constructor(private game: Game) {
     this.el = document.createElement('div');
     this.el.className = 'phone';
-    this.el.innerHTML = `<div class="bar-top"><span class="ph-clock">09:00</span><span>CRIMSON·NET</span><span class="ph-cash"></span></div><div class="screen"></div>
-      <div class="nav"><button class="btn small" data-a="back">◀</button><button class="btn small" data-a="home">●</button><button class="btn small" data-a="close">✕</button></div>`;
+    this.el.innerHTML = `<div class="ph-main"><div class="bar-top"><span class="ph-clock">09:00</span><span class="ph-title"></span>
+      <span class="ph-status"><span class="ph-cash"></span><i class="sig"><b></b><b></b><b></b><b></b></i><i class="bat"><b></b></i></span></div><div class="screen"></div></div>
+      <div class="ph-rail"><button class="rb" data-a="close" aria-label="Close phone">✕</button><button class="rb home" data-a="home" aria-label="Home"></button><button class="rb" data-a="back" aria-label="Back">‹</button></div>`;
     game.container.appendChild(this.el);
     this.screen = this.el.querySelector('.screen')!;
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -165,11 +177,11 @@ export class Phone {
     this.canvas = null;
     (this.el.querySelector('.ph-cash') as HTMLElement).textContent = formatMoney(g.wallet.cash);
     (this.el.querySelector('.ph-clock') as HTMLElement).textContent = g.env?.clock.text() ?? '';
+    (this.el.querySelector('.ph-title') as HTMLElement).textContent = TITLES[this.app];
     const s = this.screen;
     switch (this.app) {
       case 'home':
-        s.innerHTML = `<div class="apps">${APPS.map((a) => `<button class="app" data-a="app" data-id="${a.id}"><span class="ic" style="background:${a.color}">${a.icon}</span>${a.name}</button>`).join('')}</div>
-          <div class="muted" style="text-align:center;padding:8px">Story ${g.saves.progressText()} · 🐚 ${g.collectibles?.count ?? 0}/${g.collectibles?.spots.length ?? 30}</div>`;
+        s.innerHTML = `<div class="ph-home">${this.widgetHtml()}<div class="apps">${APPS.map((a) => `<button class="app" data-a="app" data-id="${a.id}"><span class="ic" style="--c:${a.color}">${a.icon}</span><span class="nm">${a.name}</span></button>`).join('')}</div></div>`;
         break;
       case 'map':
         this.renderMap();
@@ -190,6 +202,19 @@ export class Phone {
         s.innerHTML = this.propertyHtml();
         break;
     }
+  }
+
+  /** Home-screen widget: the next story job (tap for GPS) plus progress. */
+  private widgetHtml(): string {
+    const g = this.game;
+    const next = g.missions?.available()[0];
+    const giver = next ? CHARACTERS[next.giver] : null;
+    const shells = `${g.collectibles?.count ?? 0}/${g.collectibles?.spots.length ?? 30}`;
+    return `<div class="ph-widget">
+      <div class="w-time">${g.env?.clock.text() ?? ''}</div>
+      <div class="w-day">Day ${(g.env?.clock.day ?? 0) + 1} · ${formatMoney(g.wallet.cash)}</div>
+      ${next ? `<button class="w-next" data-a="wp" data-x="${next.start.x}" data-z="${next.start.z}"><span class="k">Next job · ${esc(giver?.name.split(' ')[0] ?? next.giver)}</span><span class="t">${esc(next.title)}</span><span class="go">Set GPS ›</span></button>` : '<div class="w-next"><span class="t">No story jobs right now</span></div>'}
+      <div class="w-stats"><span>Story <b>${g.saves.progressText()}</b></span><span>Shells <b>${shells}</b></span></div></div>`;
   }
 
   private missionsHtml(): string {

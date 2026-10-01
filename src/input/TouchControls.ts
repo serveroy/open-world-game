@@ -21,30 +21,34 @@ interface ButtonDef {
 
 const B = (d: ButtonDef): ButtonDef => d;
 export const TOUCH_BUTTONS: ButtonDef[] = [
-  // on foot
-  B({ id: 'attack', action: 'attack', label: '✊', right: 30, bottom: 120, size: 78, modes: ['foot', 'vehicle', 'boat', 'heli'] }),
-  B({ id: 'aim', action: 'aim', label: '◎', right: 120, bottom: 190, size: 62, modes: ['foot', 'vehicle'], toggle: false }),
-  B({ id: 'jump', action: 'jump', label: '⤒', right: 126, bottom: 36, size: 64, modes: ['foot'] }),
-  B({ id: 'sprint', action: 'sprint', label: '»', right: 30, bottom: 30, size: 72, modes: ['foot'] }),
-  B({ id: 'enter', action: 'enter', label: 'ENTER', right: 210, bottom: 120, size: 66, modes: ['foot'], contextual: true }),
-  B({ id: 'exit', action: 'enter', label: 'EXIT', right: 30, bottom: 130, size: 52, modes: ['vehicle', 'boat', 'heli'], top: true }),
-  B({ id: 'reload', action: 'reload', label: '⟳', right: 200, bottom: 210, size: 50, modes: ['foot'], contextual: true }),
-  B({ id: 'cover', action: 'cover', label: '▣', right: 210, bottom: 40, size: 54, modes: ['foot'] }),
-  B({ id: 'interact', action: 'interact', label: 'USE', right: 290, bottom: 110, size: 62, modes: ['foot', 'vehicle'], contextual: true }),
-  B({ id: 'wheel', action: 'wheel', label: '⊕', right: 30, bottom: 210, size: 54, modes: ['foot', 'vehicle'] }),
-  B({ id: 'switchTarget', action: 'switchTarget', label: '⇆', right: 104, bottom: 270, size: 46, modes: ['foot'], contextual: true }),
+  // on foot (right-thumb cluster, measured from the bottom-right corner)
+  B({ id: 'sprint', action: 'sprint', label: '»', right: 22, bottom: 22, size: 70, modes: ['foot'] }),
+  B({ id: 'attack', action: 'attack', label: '✊', right: 22, bottom: 108, size: 74, modes: ['foot'] }),
+  B({ id: 'jump', action: 'jump', label: '⤒', right: 106, bottom: 22, size: 60, modes: ['foot'] }),
+  B({ id: 'cover', action: 'cover', label: '▣', right: 180, bottom: 24, size: 50, modes: ['foot'] }),
+  B({ id: 'aim', action: 'aim', label: '◎', right: 106, bottom: 100, size: 58, modes: ['foot'] }),
+  B({ id: 'enter', action: 'enter', label: 'ENTER', right: 178, bottom: 86, size: 62, modes: ['foot'], contextual: true }),
+  B({ id: 'interact', action: 'interact', label: 'USE', right: 250, bottom: 92, size: 58, modes: ['foot'], contextual: true }),
+  B({ id: 'reload', action: 'reload', label: '⟳', right: 112, bottom: 168, size: 46, modes: ['foot'], contextual: true }),
+  B({ id: 'switchTarget', action: 'switchTarget', label: '⇆', right: 170, bottom: 160, size: 44, modes: ['foot'], contextual: true }),
+  B({ id: 'wheel', action: 'wheel', label: '⊕', right: 22, bottom: 192, size: 50, modes: ['foot'] }),
   // vehicles
-  B({ id: 'gas', action: 'gas', label: '▲', right: 30, bottom: 26, size: 92, modes: ['vehicle', 'boat'] }),
-  B({ id: 'brake', action: 'brake', label: '▼', right: 140, bottom: 26, size: 76, modes: ['vehicle', 'boat'] }),
-  B({ id: 'handbrake', action: 'handbrake', label: 'HB', right: 236, bottom: 30, size: 60, modes: ['vehicle'] }),
-  B({ id: 'horn', action: 'horn', label: '📯', right: 236, bottom: 110, size: 50, modes: ['vehicle', 'boat'] }),
-  B({ id: 'camera', action: 'camera', label: '🎥', right: 138, bottom: 30, size: 44, modes: ['vehicle', 'boat', 'heli', 'foot'], left: true, top: true }),
-  B({ id: 'radio', action: 'radio', label: '📻', right: 192, bottom: 30, size: 44, modes: ['vehicle', 'boat', 'heli'], left: true, top: true }),
-  B({ id: 'ascend', action: 'ascend', label: '⇧', right: 30, bottom: 40, size: 84, modes: ['heli'] }),
-  B({ id: 'descend', action: 'descend', label: '⇩', right: 130, bottom: 30, size: 70, modes: ['heli'] }),
-  // always
-  B({ id: 'phone', action: 'phone', label: '📱', right: 30, bottom: 30, size: 44, modes: ['foot', 'vehicle', 'boat', 'heli'], left: true, top: true }),
-  B({ id: 'pause', action: 'pause', label: 'II', right: 84, bottom: 30, size: 44, modes: ['foot', 'vehicle', 'boat', 'heli'], left: true, top: true }),
+  B({ id: 'gas', action: 'gas', label: '▲', right: 22, bottom: 20, size: 86, modes: ['vehicle', 'boat'] }),
+  B({ id: 'brake', action: 'brake', label: '▼', right: 118, bottom: 20, size: 70, modes: ['vehicle', 'boat'] }),
+  B({ id: 'handbrake', action: 'handbrake', label: 'HB', right: 198, bottom: 24, size: 56, modes: ['vehicle'] }),
+  B({ id: 'vattack', action: 'attack', label: '✊', right: 22, bottom: 118, size: 60, modes: ['vehicle', 'boat', 'heli'] }),
+  B({ id: 'exit', action: 'enter', label: 'EXIT', right: 96, bottom: 104, size: 56, modes: ['vehicle', 'boat', 'heli'] }),
+  B({ id: 'horn', action: 'horn', label: '📯', right: 166, bottom: 96, size: 46, modes: ['vehicle', 'boat'] }),
+  B({ id: 'vinteract', action: 'interact', label: 'USE', right: 156, bottom: 156, size: 50, modes: ['vehicle', 'boat', 'heli'], contextual: true }),
+  B({ id: 'vaim', action: 'aim', label: '◎', right: 90, bottom: 172, size: 44, modes: ['vehicle'] }),
+  B({ id: 'vwheel', action: 'wheel', label: '⊕', right: 22, bottom: 190, size: 44, modes: ['vehicle'] }),
+  B({ id: 'ascend', action: 'ascend', label: '⇧', right: 22, bottom: 24, size: 80, modes: ['heli'] }),
+  B({ id: 'descend', action: 'descend', label: '⇩', right: 112, bottom: 22, size: 66, modes: ['heli'] }),
+  // top-left utility row (anchored to the top edge)
+  B({ id: 'phone', action: 'phone', label: '📱', right: 12, bottom: 8, size: 40, modes: ['foot', 'vehicle', 'boat', 'heli'], left: true, top: true }),
+  B({ id: 'pause', action: 'pause', label: 'II', right: 58, bottom: 8, size: 40, modes: ['foot', 'vehicle', 'boat', 'heli'], left: true, top: true }),
+  B({ id: 'camera', action: 'camera', label: '🎥', right: 104, bottom: 8, size: 40, modes: ['vehicle', 'boat', 'heli', 'foot'], left: true, top: true }),
+  B({ id: 'radio', action: 'radio', label: '📻', right: 150, bottom: 8, size: 40, modes: ['vehicle', 'boat'], left: true, top: true }),
 ];
 
 /**
@@ -63,6 +67,10 @@ export class TouchControls {
   private context = new Set<string>();
   private enabled = false;
   editMode = false;
+  /** Bottom edge (px) of HUD elements the right cluster must stay under (cash, bars…). */
+  topReserve: () => number = () => 110;
+  /** Effective scale of the last layout (for the HUD to match). */
+  scale = 1;
 
   constructor(private input: Input, private settings: Settings, parent: HTMLElement) {
     this.root = document.createElement('div');
@@ -84,6 +92,7 @@ export class TouchControls {
     for (const def of TOUCH_BUTTONS) this.makeButton(def);
     this.applyLayout();
     settings.onChange(() => this.applyLayout());
+    addEventListener('resize', () => setTimeout(() => this.applyLayout(), 50));
     const coarse = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
     this.setEnabled(coarse);
     addEventListener('touchstart', () => {
@@ -102,6 +111,8 @@ export class TouchControls {
   setEnabled(on: boolean): void {
     this.enabled = on;
     this.root.style.display = on ? '' : 'none';
+    this.root.parentElement?.classList.toggle('touch-on', on);
+    if (on) requestAnimationFrame(() => this.applyLayout());
     if (!on) this.releaseAll();
   }
 
@@ -109,7 +120,7 @@ export class TouchControls {
     if (mode === this.mode) return;
     this.mode = mode;
     this.releaseAll();
-    this.refreshVisibility();
+    this.applyLayout();
   }
 
   /** Show/hide a contextual button (e.g. 'enter' when near a car). */
@@ -190,25 +201,42 @@ export class TouchControls {
     this.buttons.set(def.id, el);
   }
 
+  /** Size factor for the current viewport (designed at 844×390 CSS px landscape). */
+  static autoScale(): number {
+    return Math.min(1.15, Math.max(0.6, Math.min(innerWidth / 844, innerHeight / 390)));
+  }
+
   applyLayout(): void {
     const hud = this.settings.data.hud;
-    const s = hud.buttonScale;
+    // shrink the right cluster further if it would run into the HUD at the top
+    let extent = 0;
+    for (const def of TOUCH_BUTTONS) {
+      if (def.top || !def.modes.includes(this.mode)) continue;
+      extent = Math.max(extent, def.bottom + def.size);
+    }
+    const avail = innerHeight - this.topReserve() - 6;
+    const fit = extent > 0 ? avail / extent : 1;
+    const s = Math.max(0.45, Math.min(hud.buttonScale * TouchControls.autoScale(), fit));
+    this.scale = s;
     for (const def of TOUCH_BUTTONS) {
       const el = this.buttons.get(def.id)!;
       const off = hud.offsets[def.id] ?? [0, 0];
       const leftSide = hud.leftHanded ? !def.left : !!def.left;
-      const size = def.size * s;
+      // top utility row keeps a touch-friendly minimum size
+      const size = def.top ? Math.max(34, def.size * Math.min(1, s * 1.1)) : def.size * s;
+      const step = def.top ? Math.max(34, def.size * Math.min(1, s * 1.1)) / def.size : s;
       el.style.width = el.style.height = `${size}px`;
-      el.style.fontSize = `${Math.max(11, size * (def.label.length > 2 ? 0.22 : 0.42))}px`;
+      el.style.fontSize = `${Math.max(11, size * (def.label.length > 2 ? 0.24 : 0.42))}px`;
       el.style.left = el.style.right = el.style.top = el.style.bottom = '';
-      const h = `calc(${def.right * s + off[0]}px + env(safe-area-inset-${leftSide ? 'left' : 'right'}))`;
-      const v = `calc(${def.bottom * s + off[1]}px + env(safe-area-inset-${def.top ? 'top' : 'bottom'}))`;
+      const h = `calc(${def.right * step + off[0]}px + var(${leftSide ? '--sal' : '--sar'}))`;
+      const v = `calc(${def.bottom * (def.top ? 1 : s) + off[1]}px + var(${def.top ? '--sat' : '--sab'}))`;
       if (leftSide) el.style.left = h;
       else el.style.right = h;
       if (def.top) el.style.top = v;
       else el.style.bottom = v;
       el.style.opacity = String(hud.opacity);
     }
+    document.documentElement.style.setProperty('--tscale', s.toFixed(3));
     this.refreshVisibility();
   }
 
@@ -231,7 +259,7 @@ export class TouchControls {
 
   private onMove = (e: PointerEvent): void => {
     if (e.pointerId === this.stickId) {
-      const r = 56 * this.settings.data.hud.buttonScale;
+      const r = 56 * Math.max(0.75, this.scale);
       let dx = e.clientX - this.stickOrigin.x;
       let dy = e.clientY - this.stickOrigin.y;
       const len = Math.hypot(dx, dy);

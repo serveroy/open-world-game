@@ -17,7 +17,7 @@ const TABS: { id: string; label: string; rows: Row[] }[] = [
       { k: 'fpsCap', label: 'Frame-rate cap', type: 'select', options: [[60, '60 FPS'], [30, '30 FPS (battery)'], [0, 'Uncapped']] },
       { k: 'shadows', label: 'Shadows', type: 'toggle', restart: true },
       { k: 'bloom', label: 'Bloom & post FX (High)', type: 'toggle' },
-      { k: 'viewDistance', label: 'View distance', type: 'range', min: 0.5, max: 1.5, step: 0.1, fmt: pct, restart: true },
+      { k: 'viewDistance', label: 'View distance', type: 'range', min: 0.5, max: 1.5, step: 0.1, fmt: pct },
       { k: 'showFps', label: 'Show FPS counter', type: 'toggle' },
     ],
   },
@@ -26,6 +26,7 @@ const TABS: { id: string; label: string; rows: Row[] }[] = [
       { k: 'masterVolume', label: 'Master volume', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct },
       { k: 'musicVolume', label: 'Radio / music', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct },
       { k: 'sfxVolume', label: 'Effects', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct },
+      { k: 'voice', label: 'Dialogue voices', type: 'select', options: [['speech', 'Spoken (device voice)'], ['babble', 'Babble'], ['off', 'Off']] },
       { k: 'radioStation', label: 'Default station', type: 'select', options: [[0, 'Neon FM'], [1, 'Dust Radio'], [2, 'Low Tide'], [3, 'Radio off']] },
     ],
   },
@@ -91,6 +92,7 @@ export class SettingsUI {
         this.render();
       } else if (a === 'close') game.ui.pop(this.el);
       else if (a === 'edit') this.beginEdit();
+      else if (a === 'testsound') game.audio.test();
       else if (a === 'reload') location.reload();
       else if (a === 'defaults') {
         game.settings.reset();
@@ -147,7 +149,9 @@ export class SettingsUI {
       } else ctl = `<select data-k="${r.k}">${r.options.map(([val, lab]) => `<option value="${val}" ${String(val) === String(v) ? 'selected' : ''}>${lab}</option>`).join('')}</select>`;
       return `<div class="row"><label>${r.label}${'restart' in r && r.restart ? ' <span class="muted">(restart)</span>' : ''}</label><span class="ctl">${ctl}</span></div>`;
     }).join('');
-    const extra = this.tab === 'hud' ? `<div class="row"><label>Custom button layout</label><button class="btn small primary" data-a="edit">✥ Edit layout</button></div>` : '';
+    const extra = this.tab === 'audio'
+      ? `<div class="row"><label>Can't hear anything? On iPhone, check the volume buttons; the silent switch is handled automatically.</label><button class="btn small primary" data-a="testsound">🔊 Test sound</button></div>`
+      : this.tab === 'hud' ? `<div class="row"><label>Custom button layout</label><button class="btn small primary" data-a="edit">✥ Edit layout</button></div>` : '';
     this.el.innerHTML = `<div class="box"><h2>SETTINGS</h2>
       <div class="tabs">${TABS.map((t) => `<button class="btn small${t.id === this.tab ? ' sel' : ''}" data-a="tab" data-id="${t.id}">${t.label}</button>`).join('')}</div>
       ${rows}${extra}

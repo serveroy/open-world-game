@@ -166,7 +166,10 @@ export const RECIPES: Record<string, Recipe> = {
 
 /** Render every recipe offline once, then play them through Howler (pooled, spatial). */
 export class SfxBank {
-  private howls = new Map<string, Howl>();
+  /** Rendered WAV per sound; Howls are created per playback kind on first use. */
+  private uris = new Map<string, string>();
+  private flat = new Map<string, Howl>();
+  private spatial = new Map<string, Howl>();
   ready = false;
 
   async build(): Promise<void> {
@@ -181,8 +184,7 @@ export class SfxBank {
         r.build(ctx, master);
         const buf = await ctx.startRendering();
         const data = normalize(buf.getChannelData(0).slice(), 0.9 * (r.gain ?? 1));
-        const uri = toDataUri(encodeWav(data, SR));
-        this.howls.set(name, new Howl({ src: [uri], format: ['wav'], pool: 8, preload: true }));
+        this.uris.set(name, toDataUri(encodeWav(data, SR)));
       } catch {
         /* a failed recipe just stays silent */
       }
@@ -193,12 +195,28 @@ export class SfxBank {
   }
 
   has(name: string): boolean {
-    return this.howls.has(name);
+    return this.uris.has(name);
+  }
+
+  /**
+   * 2D (UI, stings) and 3D (world) playback use separate Howl instances: Howler reuses pooled
+   * sound nodes, and a node that once had a panner would otherwise keep panning UI sounds.
+   */
+  private howl(name: string, spatial: boolean): Howl | null {
+    const map = spatial ? this.spatial : this.flat;
+    let h = map.get(name);
+    if (!h) {
+      const uri = this.uris.get(name);
+      if (!uri) return null;
+      h = new Howl({ src: [uri], format: ['wav'], pool: spatial ? 8 : 3, preload: true });
+      map.set(name, h);
+    }
+    return h;
   }
 
   /** Play a one-shot; with a position it is spatialised relative to the Howler listener. */
   play(name: string, o: { vol?: number; rate?: number; x?: number; y?: number; z?: number; ref?: number } = {}): number | null {
-    const h = this.howls.get(name);
+    const h = this.howl(name, o.x !== undefined);
     if (!h) return null;
     const id = h.play();
     h.volume(o.vol ?? 1, id);

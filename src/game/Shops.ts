@@ -96,6 +96,8 @@ export class Shops {
   /** Point the camera at the player's face for appearance shops. */
   private portrait(on: boolean): void {
     const g = this.game;
+    // lift exposure a little: shop doorways are often in a building's shadow
+    if (g.env) g.env.exposureBoost = on ? 1.3 : 1;
     if (!on) {
       g.cam.mode = g.vctrl?.inVehicle ? 'vehicle' : 'foot';
       g.cam.snapBehind(g.player.yaw);

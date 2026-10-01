@@ -29,6 +29,8 @@ export interface SettingsData {
   aimAssist: 'off' | 'light' | 'full';
   gyroAim: boolean;
   subtitles: boolean;
+  /** Dialogue voices: device speech, synthetic babble, or none. */
+  voice: 'speech' | 'babble' | 'off';
   subtitleSize: number;
   colorblind: ColorblindMode;
   haptics: boolean;
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   aimAssist: 'full',
   gyroAim: false,
   subtitles: true,
+  voice: 'speech',
   subtitleSize: 1,
   colorblind: 'off',
   haptics: true,

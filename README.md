@@ -32,7 +32,7 @@ brands.
 |---|---|---|---|
 | Move / steer | Left half: floating joystick | WASD | Left stick |
 | Look / aim | Drag right half | Mouse (click to lock pointer) | Right stick |
-| Attack / shoot | ✊ button | Left mouse | RT |
+| Attack / shoot | ✊ button | Left mouse | RT (on foot) · Y (drive-by) |
 | Aim (lock-on) | ◎ button (hold) | Right mouse | LT |
 | Switch target | Swipe while aiming / ⇆ | T / middle mouse | RB |
 | Jump / handbrake | ⤒ / HB | Space | A / RB |

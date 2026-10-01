@@ -29,6 +29,8 @@ export interface SaveData {
   stats: Record<string, number>;
   activities: Record<string, number>;
   wardrobe: string[];
+  /** Vehicle the player was driving when saved (respawned with them in it). */
+  vehicle?: { def: string; paint: number; mods: GarageCar['mods']; health: number; yaw: number } | null;
 }
 
 const DB = 'crimson-coast';
@@ -116,6 +118,7 @@ export function migrateSave(s: Partial<SaveData>): SaveData | null {
     stats: s.stats ?? {},
     activities: s.activities ?? {},
     wardrobe: s.wardrobe ?? [],
+    vehicle: s.vehicle ?? null,
   };
 }
 

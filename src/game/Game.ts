@@ -146,10 +146,16 @@ export class Game {
     this.scene = this.renderer.scene;
     this.physics = new Physics();
     this.hud = new Hud(container);
+    const setU = (): void => document.documentElement.style.setProperty('--u', TouchControls.autoScale().toFixed(3));
+    setU();
+    addEventListener('resize', setU);
     this.kbm = new KeyboardMouse(this.input, this.renderer.gl.domElement, this.settings);
     this.gamepad = new GamepadSource(this.input, this.settings);
     this.touch = new TouchControls(this.input, this.settings, container);
+    if (window.self !== window.top || params.framed) document.documentElement.classList.add('framed');
     container.classList.toggle('touch-on', this.touch.isEnabled);
+    this.touch.topReserve = () => this.hud.topRightBottom();
+    requestAnimationFrame(() => this.touch.applyLayout());
     this.chars = new CharacterRenderer(this.scene, 72, this.renderer.preset.shadows);
     this.cam = new CameraRig(this.renderer.camera, this.physics);
     this.cam.shakeScale = this.settings.data.screenShake;
@@ -444,6 +450,7 @@ export class Game {
 
   private update(dt: number, alpha: number): void {
     const inp = this.input;
+    inp.inVehicle = !!this.vctrl?.inVehicle;
     this.updateUI(dt);
     const wheelOpen = this.combat?.wheel.open ?? false;
     if (!this.controlsLocked && !wheelOpen) {

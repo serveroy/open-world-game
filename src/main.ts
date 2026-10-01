@@ -3,6 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { Game } from './game/Game';
 import { params } from './core/params';
 import { TIPS } from './data/tips';
+import { SaveManager } from './game/SaveManager';
 
 const bar = document.getElementById('boot-bar') as HTMLDivElement;
 const status = document.getElementById('boot-status') as HTMLDivElement;
@@ -31,6 +32,16 @@ async function boot(): Promise<void> {
   }
   await progress(1, 'Ready');
   game.start();
+  if (!params.test) {
+    const pending = SaveManager.takePending();
+    if (params.mission || params.skipTitle) game.saves.enabled = true;
+    else if (pending && pending !== '__new__') {
+      const d = await game.saves.store.load(pending);
+      if (d) game.saves.apply(d);
+      game.saves.enabled = true;
+    } else if (pending === '__new__') game.saves.enabled = true;
+    else void game.menus.showTitle();
+  }
   clearInterval(tipTimer);
   const el = document.getElementById('boot')!;
   el.style.opacity = '0';

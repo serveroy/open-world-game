@@ -12,4 +12,6 @@ export const params = {
   time: q.has('time') ? Number(q.get('time')) : null,
   weather: q.get('weather'),
   autoplay: q.get('autoplay') === '1',
+  /** Skip the title screen (tests / screenshots). */
+  skipTitle: q.get('play') === '1',
 };

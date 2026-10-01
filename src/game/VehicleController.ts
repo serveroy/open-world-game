@@ -194,7 +194,7 @@ export class VehicleController {
     }
     const v = this.vehicle;
     if (!v) return;
-    if (g.inputLocked) {
+    if (g.controlsLocked) {
       v.throttle = 0;
       v.brake = 1;
       v.steer = 0;
@@ -236,16 +236,23 @@ export class VehicleController {
     if (this.game.player.mode === 'scripted') this.game.player.mode = 'foot';
   }
 
+  /** Enterable vehicle next to the on-foot player (for prompt arbitration). */
+  nearVehicle: Vehicle | null = null;
+
   update(dt: number): void {
     const g = this.game;
     const p = g.player;
     // contextual enter prompt
     if (p.mode === 'foot' && !this.vehicle) {
       const near = this.findEnterable();
+      this.nearVehicle = near;
       g.touch.setContext('enter', !!near, near ? (near.driver && near.driver.kind === 'ped' ? 'JACK' : near.locked ? 'BREAK IN' : 'ENTER') : 'ENTER');
-      if (g.inputLocked) return;
+      if (g.controlsLocked) return;
       if (near && g.input.pressed('enter')) this.enter(near);
-    } else g.touch.setContext('enter', false);
+    } else {
+      this.nearVehicle = null;
+      g.touch.setContext('enter', false);
+    }
 
     if (this.target && this.phase !== 'none') return;
     const v = this.vehicle;

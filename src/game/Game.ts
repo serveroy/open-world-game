@@ -32,6 +32,24 @@ import { Respawn } from './Respawn';
 import { PoliceManager } from '../police/PoliceManager';
 import type { Blip } from '../ui/Minimap';
 import { MissionManager } from '../missions/MissionManager';
+import { UIStack } from '../ui/UIStack';
+import { ShopUI } from '../ui/ShopUI';
+import { Interactions } from './Interactions';
+import { Estate } from '../economy/Estate';
+import { PlayerStats } from './PlayerStats';
+import { Shops } from './Shops';
+import { Gps } from './Gps';
+import { ActivityManager } from '../activities/ActivityManager';
+import { StreetRace, RACES } from '../activities/Race';
+import { TaxiJob, DeliveryJob } from '../activities/Jobs';
+import { TheftContracts, Rampage } from '../activities/Crime';
+import { StreetEvents } from '../activities/StreetEvents';
+import { Collectibles } from '../activities/Collectibles';
+import { Nightlife } from '../activities/Nightlife';
+import { SaveManager } from './SaveManager';
+import { Phone } from '../ui/Phone';
+import { SettingsUI } from '../ui/SettingsUI';
+import { Menus } from '../ui/Menus';
 
 /** A pluggable game system. All hooks optional. */
 export interface System {
@@ -79,6 +97,20 @@ export class Game {
   private blipList: Blip[] = [];
   readonly wallet = new Wallet(0);
   readonly respawn: Respawn;
+  readonly ui = new UIStack();
+  readonly shopUI: ShopUI;
+  readonly estate = new Estate();
+  readonly stats = new PlayerStats();
+  readonly interactions: Interactions;
+  readonly gps: Gps;
+  readonly saves: SaveManager;
+  readonly phone: Phone;
+  readonly settingsUI: SettingsUI;
+  readonly menus: Menus;
+  shops: Shops | null = null;
+  activities: ActivityManager | null = null;
+  collectibles: Collectibles | null = null;
+  nightlife: Nightlife | null = null;
   baseMap: HTMLCanvasElement | null = null;
   /** Streaming / simulation focus (player or cutscene camera). */
   readonly focus = new THREE.Vector3();
@@ -86,6 +118,10 @@ export class Game {
   paused = false;
   /** When true gameplay ignores player input (cutscenes, menus, mini-games). */
   inputLocked = false;
+  /** Gameplay input is ignored (scripted lock or any UI screen open). */
+  get controlsLocked(): boolean {
+    return this.inputLocked || this.ui.open;
+  }
   /** Seconds of real play time. */
   time = 0;
   timeScale = 1;
@@ -116,6 +152,24 @@ export class Game {
     this.player = new Player(this.physics, this.chars, 0, 0.2, 0);
     this.controller = new PlayerController(this);
     this.respawn = new Respawn(this);
+    this.shopUI = new ShopUI(container, this.ui, () => this.wallet.cash, (m) => this.hud.toast(m, 2200));
+    this.interactions = new Interactions(this);
+    this.gps = new Gps(this);
+    this.saves = new SaveManager(this);
+    this.phone = new Phone(this);
+    this.settingsUI = new SettingsUI(this);
+    this.menus = new Menus(this);
+    this.ui.onChange = (open) => {
+      if (open) this.input.reset();
+      this.hud.showHelp(null);
+    };
+    installColorblindFilters();
+    const applyVisual = (s: { colorblind: string; subtitleSize: number }): void => {
+      for (const c of ['cb-protanopia', 'cb-deuteranopia', 'cb-tritanopia']) container.classList.toggle(c, c === `cb-${s.colorblind}`);
+      document.documentElement.style.setProperty('--sub-scale', String(s.subtitleSize));
+    };
+    applyVisual(this.settings.data);
+    this.settings.onChange(applyVisual);
     this.wallet.onChange = (cash, delta) => {
       this.hud.setCash(cash);
       if (delta !== 0) this.events.emit('cashChanged', { amount: cash, delta });
@@ -215,6 +269,43 @@ export class Game {
     this.respawn.onRespawn = () => this.police?.reset();
     this.missions = new MissionManager(this);
     this.addSystem(this.missions);
+    this.missions.onUnlock = (what, id) => {
+      if (what === 'property') {
+        const granted = this.estate.unlock(id, (this.env?.clock.totalHours ?? 0) / 24);
+        if (granted) this.hud.toast(`New safehouse: ${id.replace('safehouse_', '').replace(/^./, (c) => c.toUpperCase())} — sleep there to save`, 3500);
+        else this.hud.toast('A new property is on the market', 2500);
+      } else if (what === 'contact') this.hud.toast(`New contact added to your phone`, 2500);
+      else if (what === 'shop') this.hud.toast('A new shop is open for business', 2500);
+    };
+    // economy, side activities, saves
+    this.addSystem(this.interactions);
+    this.addSystem(this.gps);
+    this.shops = new Shops(this);
+    const acts = new ActivityManager(this);
+    this.activities = acts;
+    for (const r of RACES) acts.add(new StreetRace(acts, r));
+    acts.add(new TaxiJob(acts));
+    acts.add(new DeliveryJob(acts));
+    acts.add(new TheftContracts(acts));
+    acts.add(new Rampage(acts));
+    acts.add(new StreetEvents(acts));
+    this.addSystem(acts);
+    this.collectibles = new Collectibles(this);
+    this.addSystem(this.collectibles);
+    this.nightlife = new Nightlife(this);
+    this.addSystem({ name: 'nightlife', update: (dt) => this.nightlife!.update(dt) });
+    this.addSystem(this.saves);
+    this.events.on('pedKilled', (e) => {
+      if (!e.byPlayer) return;
+      this.stats.inc('kills');
+      if (e.cop) this.stats.inc('copKills');
+    });
+    this.events.on('vehicleEntered', (e) => e.stolen && this.stats.inc('carsStolen'));
+    this.events.on('vehicleDestroyed', (e) => e.byPlayer && this.stats.inc('carsDestroyed'));
+    this.events.on('shot', (e) => e.byPlayer && this.stats.inc('shots'));
+    this.events.on('playerBusted', () => this.stats.inc('busted'));
+    this.events.on('playerDied', () => this.stats.inc('wasted'));
+    this.events.on('missionPassed', () => this.stats.inc('missions'));
     if (params.mission) this.missions.debugStart(params.mission);
     this.peds.onPedAttack = (ped) => {
       const p = this.player;
@@ -274,7 +365,7 @@ export class Game {
     this.kbm.poll();
     this.gamepad.poll(dt);
     const sdt = dt * this.timeScale;
-    if (!this.paused) {
+    if (!this.paused && !this.ui.pausing) {
       const fixed = this.physics.fixedDt;
       this.acc += sdt;
       let steps = 0;
@@ -327,10 +418,22 @@ export class Game {
     return v.def.name;
   }
 
+  /** Menus / phone / pause input (runs paused or not). */
+  private updateUI(dt: number): void {
+    if (this.ui.open) {
+      this.phone.update();
+      this.ui.poll(this.input, dt);
+    } else {
+      this.menus.update();
+      if (!this.ui.open) this.phone.update();
+    }
+  }
+
   private update(dt: number, alpha: number): void {
     const inp = this.input;
+    this.updateUI(dt);
     const wheelOpen = this.combat?.wheel.open ?? false;
-    if (!this.inputLocked && !wheelOpen) {
+    if (!this.controlsLocked && !wheelOpen) {
       const aimScale = this.controller.aiming ? this.settings.data.aimSensitivity : 1;
       this.cam.look(inp.lookX * aimScale, inp.lookY * aimScale);
       inp.lookX = inp.lookY = 0;
@@ -382,13 +485,25 @@ export class Game {
     this.hud.vitals(p.vitals.health, p.vitals.maxHealth, p.vitals.armor, p.vitals.stamina, p.swimming ? p.vitals.breath : null);
     this.hud.setUnderwater(this.cam.underwater);
     this.hud.update(dt);
-    this.touch.setMode(p.mode === 'vehicle' ? this.touchVehicleMode : 'foot');
+    this.touch.setMode(this.ui.open && !this.touch.editMode ? 'hidden' : p.mode === 'vehicle' ? this.touchVehicleMode : 'foot');
+    if (p.mode === 'foot' && !this.ui.open) this.stats.inc('distanceFoot', Math.hypot(p.vel.x, p.vel.z) * dt);
+    else if (this.vctrl?.vehicle) this.stats.inc('distanceDriven', Math.abs(this.vctrl.vehicle.speed) * dt);
     if (params.debug || this.settings.data.showFps) this.hud.debug(this.debugText());
     else this.hud.debug(null);
   }
   touchVehicleMode: 'vehicle' | 'boat' | 'heli' = 'vehicle';
 
   private updatePaused(dt: number): void {
+    this.updateUI(dt);
+    this.menus.updateTitle(dt);
+    // keep sky / lighting / water alive behind menus
+    if (this.world && this.env) {
+      this.focus.copy(this.player.renderPos);
+      this.env.update(0, this.focus, this.renderer.gl);
+      this.water?.update(this.renderer.camera, this.time);
+    }
+    this.touch.setMode(this.ui.open && !this.touch.editMode ? 'hidden' : 'foot');
+    this.chars.commit();
     this.hud.update(dt);
   }
 
@@ -401,7 +516,7 @@ export class Game {
       `chunks ${this.world?.chunkCount ?? 0}  ${this.env ? this.env.clock.text() + ' ' + this.env.weather.target : ''}`;
   }
 
-  stats(): Record<string, number | string> {
+  perf(): Record<string, number | string> {
     const info = this.renderer.gl.info;
     return {
       fps: Math.round(this.fps),
@@ -418,4 +533,23 @@ export class Game {
       time: this.env?.clock.text() ?? '',
     };
   }
+}
+
+/** SVG colour-matrix filters used by the colour-blind CSS modes (daltonisation approximations). */
+function installColorblindFilters(): void {
+  if (document.getElementById('cb-filters')) return;
+  // Assistive matrices: push confusable hues apart so red/green (or blue/yellow) stay distinct.
+  const assist: Record<string, string> = {
+    protanopia: '1 0 0 0 0  0.7 0.3 0 0 0  0.7 0 0.3 0 0  0 0 0 1 0',
+    deuteranopia: '0.8 0.2 0 0 0  0 1 0 0 0  0 0.7 0.3 0 0  0 0 0 1 0',
+    tritanopia: '1 0 0 0 0  0 0.8 0.2 0 0  0 0 1 0 0  0 0 0 1 0',
+  };
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.id = 'cb-filters';
+  svg.setAttribute('width', '0');
+  svg.setAttribute('height', '0');
+  svg.style.position = 'absolute';
+  svg.innerHTML = Object.entries(assist).map(([k, v]) => `<filter id="cb-${k}" color-interpolation-filters="linearRGB"><feColorMatrix type="matrix" values="${v}"/></filter>`).join('');
+  document.body.appendChild(svg);
 }

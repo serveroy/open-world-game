@@ -148,7 +148,7 @@ export class MissionManager implements System, MissionHost {
     return this.game.time;
   }
 
-  private appearance(key: AppearanceKey | string): Appearance {
+  appearance(key: AppearanceKey | string): Appearance {
     if (key.startsWith('story:')) {
       const c = CHARACTERS[key.slice(6)];
       if (c) return { ...c.app };
@@ -234,7 +234,7 @@ export class MissionManager implements System, MissionHost {
     return p;
   }
 
-  private makeHostile(p: Ped): void {
+  makeHostile(p: Ped): void {
     p.hostile = true;
     p.archetype = p.archetype === 'story' ? 'story' : 'gang';
     if (!p.weapon) p.weapon = null;
@@ -883,7 +883,7 @@ export class MissionManager implements System, MissionHost {
       const y = m.y ?? (g.world ? Math.max(g.world.groundY(m.x, m.z), 0) + 0.05 : 0);
       this.markers.beacon(m.x, y, m.z, Math.max(1.5, m.radius * 0.6), 0xffd250);
     }
-    if (!this.active) {
+    if (!this.active && !g.activities?.current && !g.ui.open) {
       this.startCooldown -= dt;
       for (const m of this.available()) {
         const d = Math.hypot(pp.x - m.start.x, pp.z - m.start.z);
@@ -918,7 +918,7 @@ export class MissionManager implements System, MissionHost {
 
   /** Minimap blips: mission starts, objective, targets, pickups. */
   blips(out: Blip[]): void {
-    if (!this.active) {
+    if (!this.active && !this.game.activities?.current) {
       for (const m of this.available()) {
         const giver = CHARACTERS[m.giver];
         out.push({ x: m.start.x, z: m.start.z, color: '#ff4d8a', shape: 'icon', size: 6, label: (giver?.name ?? m.giver)[0]!.toUpperCase(), pin: m === this.available()[0] });

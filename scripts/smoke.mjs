@@ -43,7 +43,7 @@ try {
   errors.push('game did not become ready in 60s');
 }
 await page.waitForTimeout(waitMs);
-const stats = await page.evaluate(() => (window.__game?.stats ? window.__game.stats() : null));
+const stats = await page.evaluate(() => (window.__game?.stats ? window.__game.perf() : null));
 const name = (params.replace(/[^a-z0-9]+/gi, '_') || 'default') + (mobile ? '_mobile' : '');
 await page.screenshot({ path: `${outDir}${name}.png` });
 if (process.env.SMOKE_SCRIPT) {
@@ -51,7 +51,7 @@ if (process.env.SMOKE_SCRIPT) {
   console.log('script result:', JSON.stringify(extra));
   await page.waitForTimeout(Number(process.env.SMOKE_WAIT2 ?? 3000));
   await page.screenshot({ path: `${outDir}${name}_2.png` });
-  const after = await page.evaluate(() => (window.__game?.stats ? window.__game.stats() : null));
+  const after = await page.evaluate(() => (window.__game?.stats ? window.__game.perf() : null));
   console.log('after:', JSON.stringify(after));
 }
 await writeFile(`${outDir}${name}.json`, JSON.stringify({ stats, errors }, null, 2));

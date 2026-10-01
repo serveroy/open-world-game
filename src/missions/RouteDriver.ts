@@ -11,7 +11,7 @@ export class RouteDriver {
   constructor(
     readonly v: Vehicle,
     readonly route: [number, number][],
-    readonly speed: number,
+    public speed: number,
     readonly opts: { loop?: boolean; aggressive?: boolean; flee?: boolean; pursue?: boolean } = {},
   ) {
     // start at the closest waypoint ahead

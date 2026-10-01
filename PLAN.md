@@ -18,7 +18,7 @@
 | M5 Weapons, shooting, melee, ragdolls | ✅ done | 10 weapons, wheel, lock-on/swipe/gyro aim, throwables + fire zones, 7-body ragdolls, wasted flow; gun shop in M8 |
 | M6 Police & wanted system | ✅ done | wanted logic unit-tested; foot cops (arrest/cover/flank), cruisers (route pursuit, ram/PIT), roadblocks + spikes, SWAT, spotlight heli, search cones |
 | M7 Mission system + full story, desert & sea content | ✅ done | JSON missions (23 incl. 2 endings) schema-validated & auto-played in tests; runner w/ checkpoints, fail/retry, cutscenes, choices |
-| M8 Economy, properties, shops, side activities, phone UI | ⬜ todo | |
+| M8 Economy, properties, shops, side activities, phone UI | ✅ done | Estate (4 safehouses + garages, 5 businesses), 6 shop types, 3 races, taxi/delivery/theft/rampage, street events, 30 shells, clubs, phone, settings + HUD editor, title/pause, IndexedDB saves |
 | M9 Audio, polish, perf tuning, PWA, Vercel, README | ⬜ todo | |
 
 **Resume rule:** if a session ends, open this table, find the first milestone that is not ✅,
@@ -408,5 +408,15 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
 - (M7) Missions live in `src/data/missions/act{1,2,3}.json`; `MissionRunner` is pure and driven by
   `MissionManager` (the MissionHost). Checkpoint sections must be self-contained (spawn what they
   need after the checkpoint) — retry resumes right after the checkpoint step.
+- (M8) Club interiors are a stylised full-screen overlay (animated lights + crowd) rather than
+  3D interiors: keeps draw calls/memory flat and the adult VIP option strictly off-screen (fade
+  to black, time skip). Dance mini-game is DOM-driven (keyboard / D-pad / touch pads).
+- (M8) Mid-game "Load" and "New Game" reload the page with a sessionStorage flag so every system
+  starts from clean state; loading from the title screen applies the save in place.
+- (M8) Side activities reuse MissionManager's tagged spawning (`spawnWave`, `makeHostile`) for
+  rampages/muggers; one activity runs at a time and blocks story mission starts.
+- (M8) Saves: IndexedDB `crimson-coast/saves` (auto + 3 manual slots), localStorage then memory
+  fallback; auto-save on mission pass, purchases, collectibles, every 3 min of safe free roam and
+  when the tab is hidden. `?play=1` skips the title (used by screenshot scripts).
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.

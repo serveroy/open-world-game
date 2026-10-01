@@ -40,6 +40,8 @@ export class Hud {
   private debugEl: HTMLElement;
   private radioEl: HTMLElement;
   private zoneEl: HTMLElement;
+  private saveEl: HTMLElement;
+  private saveTimer = 0;
   readonly minimapWrap: HTMLDivElement;
   private cache = new Map<string, string | number>();
   private hitTimer = 0;
@@ -89,6 +91,7 @@ export class Hud {
     this.radioEl = el('div', 'radio-name', this.root);
     this.zoneEl = el('div', 'zone-name', this.root);
     this.minimapWrap = el('div', 'minimap', this.root);
+    this.saveEl = el('div', 'save-icon', this.root, '💾 Saved');
     this.fadeEl = el('div', 'fade', parent);
     this.debugEl = el('div', 'debug', parent);
     this.debugEl.style.display = 'none';
@@ -270,6 +273,11 @@ export class Hud {
     this.zoneTimer = 3.5;
   }
 
+  saveIcon(): void {
+    this.saveEl.style.opacity = '1';
+    this.saveTimer = 2;
+  }
+
   letterbox(on: boolean): void {
     this.setClass('lb', this.root, 'letterbox', on);
   }
@@ -310,6 +318,10 @@ export class Hud {
     if (this.radioTimer > 0) {
       this.radioTimer -= dt;
       if (this.radioTimer <= 0) this.radioEl.style.opacity = '0';
+    }
+    if (this.saveTimer > 0) {
+      this.saveTimer -= dt;
+      if (this.saveTimer <= 0) this.saveEl.style.opacity = '0';
     }
     if (this.zoneTimer > 0) {
       this.zoneTimer -= dt;

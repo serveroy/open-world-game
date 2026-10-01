@@ -24,14 +24,15 @@ const page = await browser.newPage(mobile ? { viewport: { width: 844, height: 39
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (process.env.VERBOSE) console.log('[page]', m.text()); });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n' + e.stack));
-await page.goto(`http://localhost:4180/index.html${query}`);
+const q2 = /[?&](play|title)=/.test(query) ? query : query + (query.includes("?") ? "&" : "?") + "play=1";
+await page.goto(`http://localhost:4180/index.html${q2}`);
 await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 90000 }).catch(() => errors.push('not ready'));
 await page.waitForTimeout(1500);
 for (const s of shots) {
   const r = await page.evaluate(s.js).catch((e) => 'ERR ' + e.message);
   await page.waitForTimeout(s.wait ?? 2500);
   await page.screenshot({ path: `${outDir}shot_${s.name}.png` });
-  const st = await page.evaluate(() => window.__game.stats());
+  const st = await page.evaluate(() => window.__game.perf());
   console.log(s.name, JSON.stringify(r), JSON.stringify(st));
 }
 console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no console errors');

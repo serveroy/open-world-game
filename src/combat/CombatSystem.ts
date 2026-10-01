@@ -93,7 +93,7 @@ export class CombatSystem implements System {
   // ---------------------------------------------------------------------------
   private canAct(): boolean {
     const p = this.game.player;
-    if (this.game.inputLocked || this.game.theft?.busy) return false;
+    if (this.game.controlsLocked || this.game.theft?.busy) return false;
     if (p.mode === 'foot') return !p.swimming;
     if (p.mode === 'vehicle') {
       const v = this.game.vctrl?.vehicle;
@@ -116,7 +116,7 @@ export class CombatSystem implements System {
     else this.combo = 0;
 
     // weapon selection
-    if (!g.inputLocked) {
+    if (!g.controlsLocked) {
       if (inp.pressed('nextWeapon')) this.switchWeapon(this.arsenal.cycle(1));
       if (inp.pressed('prevWeapon')) this.switchWeapon(this.arsenal.cycle(-1));
       if (inp.pressed('wheel') && !this.wheel.open && (p.mode === 'foot' || p.mode === 'vehicle')) {

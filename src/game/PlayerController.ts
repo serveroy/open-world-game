@@ -39,7 +39,7 @@ export class PlayerController {
     }
     if (p.mode !== 'foot' && p.mode !== 'vault') return;
     const inp = g.input;
-    if (g.inputLocked) {
+    if (g.controlsLocked) {
       const it = this.footIntent();
       it.dx = it.dz = 0;
       it.jump = false;
@@ -69,7 +69,7 @@ export class PlayerController {
     const g = this.game;
     const p = g.player;
     if (p.mode === 'foot' || p.mode === 'vault') {
-      this.aiming = g.input.down('aim') && !p.swimming && !g.inputLocked;
+      this.aiming = g.input.down('aim') && !p.swimming && !g.controlsLocked;
       if (g.cam.mode !== 'cutscene') g.cam.mode = this.aiming ? 'aim' : 'foot';
     }
   }

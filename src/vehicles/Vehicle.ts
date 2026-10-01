@@ -294,7 +294,7 @@ export class Vehicle {
       ctrl.setWheelEngineForce(i, driven ? force / nDriven : 0);
       ctrl.setWheelSteering(i, front ? this.steerAngle : 0);
       let b = brake;
-      let grip = d.grip * (this.tirePopped[i] ? 0.45 : 1);
+      let grip = d.grip * (1 + this.mods.wheels * 0.05) * (this.tirePopped[i] ? 0.45 : 1);
       if (this.handbrake && !front) {
         b = Math.max(b, d.brakeForce * 1.6);
         grip *= 0.42;

@@ -3,7 +3,7 @@ import type { Settings } from '../core/Settings';
 
 // Standard mapping button indices → actions.
 const BUTTONS: [number, Action][] = [
-  [0, 'jump'], [1, 'enter'], [2, 'reload'], [3, 'cover'], [4, 'wheel'], [5, 'switchTarget'],
+  [0, 'jump'], [1, 'enter'], [2, 'reload'], [2, 'interact'], [3, 'cover'], [4, 'wheel'], [5, 'switchTarget'],
   [8, 'phone'], [9, 'pause'], [10, 'sprint'], [11, 'camera'], [12, 'radio'], [13, 'horn'],
   [14, 'prevWeapon'], [15, 'nextWeapon'],
 ];

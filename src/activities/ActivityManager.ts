@@ -224,7 +224,7 @@ export class ActivityManager implements System {
       this.anim.steer = 0;
       this.anim.time += dt;
       computePose(this.pose, this.anim);
-      g.chars.update(p.slot, _v.x, _v.y, _v.z, Math.atan2(_f.x, _f.z), this.pose, 'none');
+      g.chars.update(p.slot, _v.x, _v.y, _v.z, Math.atan2(_f.x, _f.z), this.pose, 'none', this.anim);
     }
     // litter collection
     this.litterT -= dt;

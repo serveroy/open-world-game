@@ -430,3 +430,12 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
 - (Post-M9) In-car mix: radio is the foreground (compressed, about −16 dBFS RMS). The player's vehicle goes through a cabin bus that is ducked about 9 dB and muffled while the radio plays. Warning sounds (skids, crashes, guns, sirens, horns) bypass the duck. Levels were tuned against measured bus RMS (`CABIN_UNDER_RADIO`, `RADIO_MAKEUP`).
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.
+- (Post-M9) Characters: the instanced box humanoids were replaced by skinned bodies with motion-capture animation (Quaternius Universal Animation Library 1+2, CC0).
+  - The asset build (`scripts/build-characters.mjs`) bakes the skeleton, two simplified bodies and 51 clips into `src/assets/chars.bin` (about 0.9 MB).
+  - Rendering is GPU skinning with instancing. Each character owns a row of skin matrices in a float texture, and all characters of a body type are drawn in one call.
+  - Hair, beards, hats, jackets and held items are per-instance variants chosen in the vertex shader. Clothing colours are painted per body zone in the fragment shader.
+  - The mannequin's featureless head is replaced by a sculpted head with real eyeballs.
+  - `AnimGraph` maps `AnimState` to clip layers: speed-matched gait blending, full-body and upper-body cross-fades, and FK overrides for strafing twist and lean.
+  - Actions with no clip (hands up, cower, kick, lockpick, wave, bike) retarget the old procedural `Pose` onto the skeleton (`ProcPose`).
+  - The ragdoll is now 11 bodies on real bones, with hinge-limited elbows and knees.
+  - `__game.lineup()` shows a QA row of animated characters.

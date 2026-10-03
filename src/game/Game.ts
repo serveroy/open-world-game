@@ -10,7 +10,9 @@ import { KeyboardMouse } from '../input/KeyboardMouse';
 import { GamepadSource } from '../input/Gamepad';
 import { TouchControls } from '../input/TouchControls';
 import { Hud } from '../ui/Hud';
+import type { RigData } from '../characters/rig/RigData';
 import { CharacterRenderer } from '../characters/CharacterRenderer';
+import { Lineup } from './Lineup';
 import { CameraRig } from '../player/CameraRig';
 import { Player } from '../player/Player';
 import { PlayerController } from './PlayerController';
@@ -138,7 +140,7 @@ export class Game {
   alpha = 0;
   readonly container: HTMLElement;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, rig: RigData) {
     this.container = container;
     const q = params.quality ?? (this.settings.data.quality === 'auto' ? detectQuality() : this.settings.data.quality);
     this.quality = q;
@@ -157,7 +159,7 @@ export class Game {
     container.classList.toggle('touch-on', this.touch.isEnabled);
     this.touch.topReserve = () => this.hud.topRightBottom();
     requestAnimationFrame(() => this.touch.applyLayout());
-    this.chars = new CharacterRenderer(this.scene, 72, this.renderer.preset.shadows);
+    this.chars = new CharacterRenderer(this.scene, 72, this.renderer.preset.shadows, rig, this.renderer.camera);
     this.cam = new CameraRig(this.renderer.camera, this.physics);
     this.cam.shakeScale = this.settings.data.screenShake;
     this.player = new Player(this.physics, this.chars, 0, 0.2, 0);
@@ -356,6 +358,13 @@ export class Game {
     this.cam.snapBehind(yaw);
   }
 
+  /** Debug: a row of animated characters in front of the player (visual QA). */
+  lineup(seed = 7): Lineup {
+    const l = new Lineup(this, seed);
+    this.addSystem(l);
+    return l;
+  }
+
   addSystem(s: System): void {
     this.systems.push(s);
   }
@@ -453,6 +462,7 @@ export class Game {
 
   private update(dt: number, alpha: number): void {
     const inp = this.input;
+    this.chars.beginFrame(dt);
     inp.inVehicle = !!this.vctrl?.inVehicle;
     this.updateUI(dt);
     const wheelOpen = this.combat?.wheel.open ?? false;
@@ -522,6 +532,7 @@ export class Game {
   touchVehicleMode: 'vehicle' | 'boat' | 'heli' = 'vehicle';
 
   private updatePaused(dt: number): void {
+    this.chars.beginFrame(0);
     this.updateUI(dt);
     this.menus.updateTitle(dt);
     // keep sky / lighting / water alive behind menus

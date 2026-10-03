@@ -1,0 +1,473 @@
+import { computePose, makePose, type ActionAnim, type AnimState, type Pose } from '../Pose';
+import { rotate, type RigClip, type RigData } from './RigData';
+import { blendClip, blendPoseInto, LocalPose } from './PoseEval';
+import { euler, ProcRetarget } from './ProcPose';
+
+/**
+ * Animation graph: turns the gameplay `AnimState` into blended motion-capture-style clips.
+ *
+ *  - Locomotion: idle / walk / jog / sprint (and crouch) blended by speed with a shared, foot-aligned
+ *    gait phase and playback rate matched to ground speed (no foot sliding).
+ *  - Full-body states (driving, swimming, airborne, sitting, dancing, knocked down…) and upper-body
+ *    layers (aiming, punches while running, phone, reload…) cross-fade over ~0.1 s.
+ *  - Actions without a matching clip use the procedural joint-angle pose, retargeted (ProcPose).
+ *  - Model-space tweaks (lean into turns, aim pitch, lower-body twist when strafing) are FK overrides.
+ */
+
+export type Gait = 'normal' | 'formal' | 'drunk';
+export interface AnimStyle {
+  gait: Gait;
+  /** Arms-folded idle for some bystanders. */
+  folded: boolean;
+}
+
+export const enum Mask {
+  Full = 0,
+  Upper = 1,
+  RArm = 2,
+  Arms = 3,
+}
+type MaskMode = Mask | 'auto';
+type Mode = 'loop' | 'warp' | 'once' | 'hold';
+
+interface ActionDef {
+  clip?: string;
+  proc?: boolean;
+  mask: MaskMode;
+  mode: Mode;
+  /** Clip time range (normalized) mapped over the action for 'warp'. */
+  from?: number;
+  to?: number;
+}
+
+/** How each gameplay action is animated. */
+export const ACTIONS: Record<Exclude<ActionAnim, 'none'>, ActionDef> = {
+  punch: { clip: 'Punch_Jab', mask: 'auto', mode: 'warp', from: 0.05, to: 0.75 },
+  punch2: { clip: 'Punch_Cross', mask: 'auto', mode: 'warp', from: 0.05, to: 0.75 },
+  kick: { proc: true, mask: Mask.Full, mode: 'warp' },
+  swing: { clip: 'Sword_Regular_A', mask: 'auto', mode: 'warp' },
+  stab: { clip: 'Punch_Cross', mask: 'auto', mode: 'warp', from: 0.05, to: 0.75 },
+  throw: { clip: 'OverhandThrow', mask: 'auto', mode: 'warp', from: 0.1, to: 0.8 },
+  reload: { clip: 'Pistol_Reload', mask: Mask.Upper, mode: 'warp' },
+  phone: { clip: 'Idle_TalkingPhone_Loop', mask: 'auto', mode: 'loop' },
+  handsup: { proc: true, mask: Mask.Upper, mode: 'warp' },
+  pullout: { proc: true, mask: Mask.Full, mode: 'warp' },
+  pulled: { proc: true, mask: Mask.Full, mode: 'warp' },
+  open_door: { clip: 'Interact', mask: 'auto', mode: 'warp', from: 0.1, to: 0.7 },
+  sit: { clip: 'Sitting_Idle_Loop', mask: Mask.Full, mode: 'loop' },
+  dance: { clip: 'Dance_Loop', mask: Mask.Full, mode: 'loop' },
+  talk: { clip: 'Idle_Talking_Loop', mask: 'auto', mode: 'loop' },
+  hurt: { clip: 'Hit_Chest', mask: 'auto', mode: 'warp' },
+  cower: { proc: true, mask: Mask.Full, mode: 'warp' },
+  vault: { proc: true, mask: Mask.Full, mode: 'warp' },
+  lockpick: { proc: true, mask: Mask.Full, mode: 'warp' },
+  smash: { clip: 'Melee_Hook', mask: 'auto', mode: 'warp' },
+  wave: { proc: true, mask: Mask.RArm, mode: 'warp' },
+  fall: { clip: 'Hit_Knockback', mask: Mask.Full, mode: 'once' },
+  getup: { clip: 'LayToIdle', mask: Mask.Full, mode: 'warp' },
+};
+
+interface Entry {
+  key: string;
+  /** Clip index, or −1 for the procedural pose, −2 pistol aim, −3 swim. */
+  clip: number;
+  mask: Mask;
+  mode: Mode;
+  from: number;
+  to: number;
+  t: number;
+  w: number;
+}
+
+const PROC = -1, PISTOL = -2, SWIM = -3;
+
+/** Gait speed knots (m/s): idle→walk, walk→jog, jog→sprint blend ranges. */
+const IDLE_WALK = [0.12, 0.7];
+const WALK_JOG = [2.0, 3.6];
+const JOG_SPRINT = [5.4, 6.9];
+
+const smooth = (a: number, b: number, x: number): number => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/** Shared, immutable per-rig data (clip lookups, masks, retargeter). */
+export class AnimLibrary {
+  readonly masks: Float32Array[];
+  readonly proc: ProcRetarget;
+  readonly c: Record<string, number> = {};
+  /** Model-space +Z (forward) and +Y (up) expressed in the root bone's local frame (pelvis offsets). */
+  readonly fwd = new Float32Array(3);
+  readonly up = new Float32Array(3);
+  constructor(readonly rig: RigData) {
+    const q = rig.bodies[0]!.restQ;
+    rotate(-q[0]!, -q[1]!, -q[2]!, q[3]!, 0, 0, 1, this.fwd, 0);
+    rotate(-q[0]!, -q[1]!, -q[2]!, q[3]!, 0, 1, 0, this.up, 0);
+    const nb = rig.boneNames.length;
+    const full = new Float32Array(nb).fill(1);
+    const upper = new Float32Array(nb), rarm = new Float32Array(nb), arms = new Float32Array(nb);
+    rig.boneNames.forEach((n, i) => {
+      const leg = /^(thigh|calf|foot|ball)/.test(n);
+      const side = n.endsWith('_l') ? 'l' : n.endsWith('_r') ? 'r' : '';
+      if (n === 'spine_01') upper[i] = 0.25;
+      else if (n === 'spine_02') upper[i] = 0.6;
+      else if (n === 'spine_03') upper[i] = 0.9;
+      else if (n === 'neck_01' || n === 'Head') upper[i] = 1;
+      else if (side && !leg) {
+        upper[i] = 1;
+        arms[i] = n.startsWith('clavicle') ? 0.6 : 1;
+        if (side === 'r') rarm[i] = n.startsWith('clavicle') ? 0.5 : 1;
+      }
+    });
+    this.masks = [full, upper, rarm, arms];
+    this.proc = new ProcRetarget(rig);
+    rig.clips.forEach((cl, i) => (this.c[cl.name] = i));
+  }
+  clip(name: string): RigClip {
+    return this.rig.clips[this.c[name]!]!;
+  }
+}
+
+const _poseOld: Pose = makePose();
+
+/** Per-character animation state machine + evaluator. */
+export class AnimController {
+  /** Shared gait phase (cycles). */
+  private phase = 0;
+  private idleT = Math.random() * 10;
+  private crouchT = 0;
+  private full: Entry[] = [];
+  private upper: Entry[] = [];
+  private lastAction: ActionAnim = 'none';
+  private lastActionT = 0;
+  private airT = 0;
+  private landT = 9;
+  private wasGrounded = true;
+  private gw = [1, 0, 0, 0]; // idle, walk, jog, sprint
+  private rate = 0;
+  private reverse = false;
+  /** Lower-body twist (rad) when moving sideways relative to facing. */
+  twist = 0;
+  /** Model-space FK pre-rotations per bone (null = none). Rebuilt each evaluate. */
+  readonly pre: (Float32Array | null)[];
+  private readonly preBuf: Float32Array[];
+  private readonly procLocal: LocalPose;
+  private readonly tmp: LocalPose;
+  private readonly bSpine: number[];
+  private readonly bPelvis: number;
+  private readonly bHead: number;
+  private readonly bNeck: number;
+
+  constructor(private lib: AnimLibrary, public style: AnimStyle = { gait: 'normal', folded: false }) {
+    const rig = lib.rig, nb = rig.boneNames.length;
+    this.pre = new Array<Float32Array | null>(nb).fill(null);
+    this.preBuf = Array.from({ length: nb }, () => new Float32Array(4));
+    this.procLocal = new LocalPose(nb);
+    this.tmp = new LocalPose(nb);
+    this.bSpine = ['spine_01', 'spine_02', 'spine_03'].map((n) => rig.bone(n));
+    this.bPelvis = rig.pelvis;
+    this.bHead = rig.bone('Head');
+    this.bNeck = rig.bone('neck_01');
+    this.phase = Math.random();
+  }
+
+  /** Current upper-body / full-body layer keys (debug + tests). */
+  get layers(): string {
+    return [...this.full.map((e) => `F:${e.key}@${e.w.toFixed(2)}`), ...this.upper.map((e) => `U:${e.key}@${e.w.toFixed(2)}`)].join(' ');
+  }
+
+  update(s: AnimState, dt: number): void {
+    const lib = this.lib;
+    const moving = s.speed > 0.6;
+    // ---- locomotion gait weights + phase ----
+    const sp = s.speed;
+    const wWalk = smooth(IDLE_WALK[0]!, IDLE_WALK[1]!, sp);
+    const wJog = smooth(WALK_JOG[0]!, WALK_JOG[1]!, sp);
+    const wSprint = smooth(JOG_SPRINT[0]!, JOG_SPRINT[1]!, sp);
+    const g = this.gw;
+    g[0] = 1 - wWalk;
+    g[1] = wWalk * (1 - wJog);
+    g[2] = wWalk * wJog * (1 - wSprint);
+    g[3] = wWalk * wJog * wSprint;
+    const walk = lib.clip(this.walkClip()), jog = lib.clip('Jog_Fwd_Loop'), sprint = lib.clip('Sprint_Loop');
+    const mv = g[1]! + g[2]! + g[3]!;
+    if (mv > 1e-3) {
+      const v = (g[1]! * walk.speed + g[2]! * jog.speed + g[3]! * sprint.speed) / mv;
+      const f = (g[1]! / walk.duration + g[2]! / jog.duration + g[3]! / sprint.duration) / mv;
+      // exact ground-speed match, softened in the slow-walk range (very quick shuffles look odd)
+      let r = Math.max(0.05, sp) / v;
+      if (r > 1) r = Math.pow(r, g[2]! + g[3]! > 0.5 ? 1 : 0.8);
+      this.rate = f * r;
+    } else this.rate = 1 / walk.duration;
+    // strafing / backpedalling: lower body follows the move direction, upper body keeps facing
+    const my = s.moveYaw ?? 0;
+    this.reverse = sp > 0.3 && Math.abs(my) > 1.95;
+    const twistTarget = sp > 0.3 && !s.driving && !s.swimming ? clampAbs(this.reverse ? wrap(my - Math.PI) : my, 1.25) : 0;
+    this.twist += (twistTarget - this.twist) * Math.min(1, dt * 10);
+    this.phase += dt * this.rate * (this.reverse ? -1 : 1);
+    if (this.phase > 1e3 || this.phase < -1e3) this.phase %= 1;
+    this.idleT += dt;
+    this.crouchT += dt;
+
+    // ---- airborne / landing ----
+    const airborne = !s.grounded && !s.swimming && !s.driving;
+    if (airborne) this.airT += dt;
+    if (!this.wasGrounded && s.grounded && this.airT > 0.45) this.landT = 0;
+    if (!airborne) this.airT = 0;
+    this.wasGrounded = s.grounded || s.swimming || s.driving;
+    this.landT += dt;
+
+    // ---- action bookkeeping ----
+    const act = s.action;
+    const restarted = act !== 'none' && act === this.lastAction && s.actionT < this.lastActionT - 0.05;
+    this.lastAction = act;
+    this.lastActionT = s.actionT;
+    const def = act !== 'none' ? ACTIONS[act] : null;
+    const actMask: Mask | null = def ? (def.mask === 'auto' ? (moving || airborne ? Mask.Upper : Mask.Full) : def.mask) : null;
+
+    // ---- full-body target ----
+    let fk: string | null = null;
+    let fClip = 0, fMode: Mode = 'loop', fFrom = 0, fTo = 1;
+    if (s.driving) {
+      if (s.bike) {
+        fk = 'bike';
+        fClip = PROC;
+      } else {
+        fk = 'drive';
+        fClip = lib.c['Driving_Loop']!;
+      }
+    } else if (s.swimming) {
+      fk = 'swim';
+      fClip = SWIM;
+    } else if (def && actMask === Mask.Full) {
+      fk = 'act:' + act;
+      fClip = def.proc ? PROC : lib.c[def.clip!]!;
+      fMode = def.mode;
+      fFrom = def.from ?? 0;
+      fTo = def.to ?? 1;
+    } else if (airborne && this.airT > 0.08) {
+      const rising = s.vy > 1 && this.airT < 0.5;
+      fk = rising ? 'jump' : 'fall';
+      fClip = lib.c[rising ? 'Jump_Start' : 'Jump_Loop']!;
+      fMode = rising ? 'once' : 'loop';
+      fFrom = rising ? 0.25 : 0;
+    } else if (this.landT < 0.28 && s.speed < 2.5) {
+      fk = 'land';
+      fClip = lib.c['Jump_Land']!;
+      fMode = 'once';
+      fFrom = 0.15;
+    }
+    // ---- upper-body target ----
+    let uk: string | null = null;
+    let uClip = 0, uMode: Mode = 'loop', uMask = Mask.Upper, uFrom = 0, uTo = 1;
+    if (def && actMask !== Mask.Full && actMask !== null) {
+      uk = 'act:' + act;
+      uClip = def.proc ? PROC : lib.c[def.clip!]!;
+      uMode = def.mode;
+      uMask = actMask;
+      uFrom = def.from ?? 0;
+      uTo = def.to ?? 1;
+    } else if (s.aim !== 'none' && !(def && actMask === Mask.Full) && !s.swimming) {
+      uk = 'aim:' + s.aim;
+      if (s.aim === 'pistol' || s.aim === 'rifle') uClip = PISTOL; // two-handed mocap aim (pitch-blended)
+      else if (s.aim === 'melee') {
+        uClip = lib.c['Punch_Jab']!;
+        uMode = 'hold';
+      } else {
+        uClip = lib.c['OverhandThrow']!; // wind-up
+        uMode = 'hold';
+        uFrom = 0.32;
+      }
+      uMask = s.driving ? Mask.Arms : Mask.Upper;
+    }
+    stepFader(this.full, fk, fClip, Mask.Full, fMode, fFrom, fTo, dt, fk === 'land' || fk === 'jump' ? 14 : 9, restarted && fk === 'act:' + act);
+    stepFader(this.upper, uk, uClip, uMask, uMode, uFrom, uTo, dt, 12, restarted && uk === 'act:' + act);
+    for (const e of this.full) advance(e, s, dt, this.lib.rig);
+    for (const e of this.upper) advance(e, s, dt, this.lib.rig);
+  }
+
+  private walkClip(): string {
+    return this.style.gait === 'formal' ? 'Walk_Formal_Loop' : this.style.gait === 'drunk' ? 'Zombie_Walk_Fwd_Loop' : 'Walk_Loop';
+  }
+
+  /** Evaluate the blended local pose into `out` and fill `pre` FK overrides. */
+  evaluate(s: AnimState, out: LocalPose): void {
+    const lib = this.lib;
+    const top = this.full[this.full.length - 1];
+    const fullCover = top && top.w >= 0.999 && this.full.length === 1;
+    let procDone = false;
+    const proc = (): LocalPose => {
+      if (!procDone) {
+        computePose(_poseOld, s);
+        lib.proc.apply(_poseOld, this.procLocal);
+        procDone = true;
+      }
+      return this.procLocal;
+    };
+    if (!fullCover) this.locomotion(s, out);
+    for (const e of this.full) {
+      if (fullCover && e !== top) continue;
+      this.apply(e, s, out, proc, fullCover && e === top ? 1 : ease(e.w));
+    }
+    for (const e of this.upper) this.apply(e, s, out, proc, ease(e.w));
+    this.seatAndSwim(out);
+    this.overrides(s);
+  }
+
+  /**
+   * Gameplay anchors: seated clips put the pelvis ~0.3 m behind the root, but seats/benches anchor the
+   * root under the hips; swim clips float around the root, but the player's root sits at the feet
+   * 1.3 m below the surface. Shift the pelvis accordingly (weighted by the layer).
+   */
+  private seatAndSwim(out: LocalPose): void {
+    let seat = 0, swim = 0;
+    for (const e of this.full) {
+      const w = ease(e.w);
+      if (e.key === 'drive' || e.key === 'act:sit') seat += w;
+      else if (e.key === 'swim') swim += w;
+    }
+    const f = this.lib.fwd, u = this.lib.up;
+    const dz = 0.31 * Math.min(1, seat), dy = 1.16 * Math.min(1, swim);
+    if (dz === 0 && dy === 0) return;
+    for (let a = 0; a < 3; a++) out.pelvis[a]! += f[a]! * dz + u[a]! * dy;
+  }
+
+  private apply(e: Entry, s: AnimState, out: LocalPose, proc: () => LocalPose, w: number): void {
+    const lib = this.lib, rig = lib.rig;
+    const mask = e.mask === Mask.Full ? null : lib.masks[e.mask]!;
+    const pw = e.mask === Mask.Full ? 1 : 0;
+    if (w <= 0.001) return;
+    if (e.clip === PROC) blendPoseInto(proc(), w, out, mask, pw);
+    else if (e.clip === PISTOL) {
+      const n = lib.clip('Pistol_Aim_Neutral');
+      const ap = s.aimPitch;
+      if (w >= 1 && !mask) blendClip(rig, n, 0, 1, out);
+      else {
+        // build the aim pose separately, then layer it
+        this.tmp.copy(out);
+        blendClip(rig, n, 0, 1, this.tmp);
+        if (Math.abs(ap) > 0.02) blendClip(rig, lib.clip(ap > 0 ? 'Pistol_Aim_Up' : 'Pistol_Aim_Down'), 0, Math.min(1, Math.abs(ap) / 0.9), this.tmp);
+        blendPoseInto(this.tmp, w, out, mask, pw);
+        return;
+      }
+      if (Math.abs(ap) > 0.02) blendClip(rig, lib.clip(ap > 0 ? 'Pistol_Aim_Up' : 'Pistol_Aim_Down'), 0, Math.min(1, Math.abs(ap) / 0.9), out);
+    } else if (e.clip === SWIM) {
+      const k = Math.min(1, s.speed / 1.6);
+      const idle = lib.clip('Swim_Idle_Loop'), fwd = lib.clip('Swim_Fwd_Loop');
+      if (w >= 1) {
+        blendClip(rig, idle, e.t, 1, out);
+        blendClip(rig, fwd, e.t, k, out);
+      } else {
+        this.tmp.copy(out);
+        blendClip(rig, idle, e.t, 1, this.tmp);
+        blendClip(rig, fwd, e.t, k, this.tmp);
+        blendPoseInto(this.tmp, w, out, mask, pw);
+      }
+    } else {
+      const clip = rig.clips[e.clip]!;
+      blendClip(rig, clip, e.t, w, out, mask, pw);
+    }
+  }
+
+  private locomotion(s: AnimState, out: LocalPose): void {
+    const lib = this.lib, rig = lib.rig, g = this.gw;
+    const idle = lib.clip(this.style.gait === 'drunk' ? 'Zombie_Idle_Loop' : this.style.folded ? 'Idle_FoldArms_Loop' : 'Idle_Loop');
+    blendClip(rig, idle, this.idleT, 1, out);
+    let acc = g[0]!;
+    const gaits: [number, RigClip][] = [[g[1]!, lib.clip(this.walkClip())], [g[2]!, lib.clip('Jog_Fwd_Loop')], [g[3]!, lib.clip('Sprint_Loop')]];
+    for (const [w, c] of gaits) {
+      if (w <= 0.001) continue;
+      acc += w;
+      blendClip(rig, c, gaitTime(c, this.phase), w / acc, out);
+    }
+    if (s.crouch > 0.01) {
+      const ci = lib.clip('Crouch_Idle_Loop'), cf = lib.clip('Crouch_Fwd_Loop');
+      const k = smooth(0.15, 0.8, s.speed);
+      if (s.crouch >= 0.999 && k <= 0) blendClip(rig, ci, this.crouchT, 1, out);
+      else {
+        this.tmp.copy(out);
+        blendClip(rig, ci, this.crouchT, 1, this.tmp);
+        if (k > 0) blendClip(rig, cf, gaitTime(cf, this.phase), k, this.tmp);
+        blendPoseInto(this.tmp, s.crouch, out);
+      }
+    }
+  }
+
+  private overrides(s: AnimState): void {
+    const pre = this.pre;
+    pre.fill(null);
+    // lower-body twist: pelvis turns toward the move direction, spine turns back
+    const tw = this.twist;
+    // lean into turns (roll about the forward axis), distributed over the spine
+    const lean = s.driving || s.swimming ? 0 : s.lean * 0.5;
+    if (Math.abs(tw) > 1e-3 || Math.abs(lean) > 1e-3) {
+      const p = this.preBuf[this.bPelvis]!;
+      euler(0, tw, 0, 'YXZ', p, 0);
+      pre[this.bPelvis] = p;
+      for (const b of this.bSpine) {
+        const q = this.preBuf[b]!;
+        euler(0, -tw / 3, lean / 3, 'YXZ', q, 0);
+        pre[b] = q;
+      }
+    }
+    if (s.driving && !s.bike && Math.abs(s.steer) > 0.02) {
+      const q = this.preBuf[this.bHead]!;
+      euler(0, s.steer * 0.22, 0, 'YXZ', q, 0);
+      pre[this.bHead] = q;
+    }
+    void this.bNeck;
+  }
+}
+
+function gaitTime(c: RigClip, phase: number): number {
+  let u = (phase + c.phase0) % 1;
+  if (u < 0) u += 1;
+  return u * c.duration;
+}
+
+function stepFader(list: Entry[], key: string | null, clip: number, mask: Mask, mode: Mode, from: number, to: number, dt: number, speed: number, restart: boolean): void {
+  const top = list[list.length - 1];
+  if (key && (!top || top.key !== key || restart)) {
+    // reuse a fading-out entry with the same key (no pop when toggling quickly), else push a new one
+    const i = list.findIndex((e) => e.key === key);
+    if (i >= 0 && !restart) {
+      const [e] = list.splice(i, 1);
+      list.push(e!);
+    } else {
+      list.push({ key, clip, mask, mode, from, to, t: 0, w: 0 });
+      if (list.length > 3) list.shift();
+    }
+  }
+  // linear fades (≈1/speed seconds); weights are eased when applied
+  const k = dt * speed;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const e = list[i]!;
+    const target = key && i === list.length - 1 && e.key === key ? 1 : 0;
+    e.w = target ? Math.min(1, e.w + k) : e.w - k;
+    if (target === 0 && e.w <= 0) list.splice(i, 1);
+  }
+  // once the top entry fully covers, older ones are irrelevant
+  const t2 = list[list.length - 1];
+  if (t2 && t2.w >= 1) list.splice(0, list.length - 1);
+}
+
+function advance(e: Entry, s: AnimState, dt: number, rig: RigData): void {
+  if (e.clip < 0 && e.clip !== SWIM) return;
+  if (e.clip === SWIM) {
+    e.t += dt;
+    return;
+  }
+  const c = rig.clips[e.clip]!;
+  if (e.mode === 'loop') e.t += dt;
+  else if (e.mode === 'hold') e.t = e.from * c.duration;
+  else if (e.mode === 'once') e.t = Math.min(c.duration, Math.max(e.t, e.from * c.duration) + dt);
+  else if (e.key.startsWith('act:') && s.action !== 'none') e.t = (e.from + (e.to - e.from) * s.actionT) * c.duration;
+}
+
+const ease = (w: number): number => (w >= 1 ? 1 : w <= 0 ? 0 : w * w * (3 - 2 * w));
+const wrap = (a: number): number => {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+};
+const clampAbs = (v: number, m: number): number => (v > m ? m : v < -m ? -m : v);

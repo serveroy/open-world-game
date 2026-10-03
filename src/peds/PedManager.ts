@@ -116,6 +116,14 @@ export class PedManager implements System {
     const p = new Ped(this.game.physics, slot, app, x, y, z);
     p.state = state;
     p.archetype = archetype;
+    // body-language variety: some bystanders fold their arms, suits walk formally, late-night
+    // Velvet Row has the odd stagger
+    const night = this.game.env?.night ?? 0;
+    const drunk = archetype === 'normal' && districtAt(x, z) === 'velvet' && night > 0.5 && this.rng.chance(0.15);
+    this.game.chars.setStyle(slot, {
+      gait: drunk ? 'drunk' : app.top === 'suit' ? 'formal' : 'normal',
+      folded: archetype === 'normal' && !app.female && this.rng.chance(0.3),
+    });
     p.cash = Math.floor(this.rng.range(5, 80));
     this.peds.push(p);
     registerPed(p);
@@ -809,7 +817,7 @@ export class PedManager implements System {
       // LOD: far peds update pose less precisely
       computePose(p.targetPose, a);
       blendPose(p.pose, p.targetPose, dampFactor(a.action !== 'none' ? 18 : 12, dt));
-      g.chars.update(p.slot, p.renderPos.x, p.renderPos.y, p.renderPos.z, p.yaw, p.pose, p.held);
+      g.chars.update(p.slot, p.renderPos.x, p.renderPos.y, p.renderPos.z, p.yaw, p.pose, p.held, a);
     }
   }
 
@@ -833,7 +841,7 @@ export class PedManager implements System {
     a.time += dt;
     computePose(p.targetPose, a);
     blendPose(p.pose, p.targetPose, dampFactor(10, dt));
-    g.chars.update(p.slot, _v.x, _v.y, _v.z, _e.y, p.pose, 'none');
+    g.chars.update(p.slot, _v.x, _v.y, _v.z, _e.y, p.pose, 'none', a);
     a.driving = false;
     p.yaw = _e.y;
     p.renderPos.copy(_v);

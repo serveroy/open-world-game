@@ -12,6 +12,8 @@ Read `PLAN.md` first: §0 tracks milestone progress, §11 logs deviations.
   - `SMOKE_SCRIPT='js'` runs JS after load (then `_2.png` screenshot); `SMOKE_MOBILE=1` emulates a phone
 - `node scripts/shots.mjs "?quality=high" shots.json` — batch visual QA screenshots (`[{name, js, wait}]`); `SMOKE_MOBILE=1 SHOT_W=572 SHOT_H=307 SHOT_DPR=3` + `?framed=1` emulates a phone inside the Claude app viewer
 - `node scripts/render-radio.mjs <dir>` — render the three radio stations to WAV (needs a build)
+- `node scripts/build-characters.mjs UAL1_Standard.glb UAL2_Standard.glb Mannequin_F.glb` — rebuild
+  `src/assets/chars.bin` from the CC0 Quaternius Universal Animation Library GLBs (itch.io Standard zips)
 
 ## Conventions
 - TypeScript strict; no `any` unless interfacing with untyped browser APIs (comment why).
@@ -19,6 +21,8 @@ Read `PLAN.md` first: §0 tracks milestone progress, §11 logs deviations.
   for classes, `camelCase.ts` for function/util modules, data in `src/data/*.json|ts`.
 - Units: meters, seconds, radians. +Y up, +X east, −Z north. Models (cars, characters) are
   built facing local **+Z**; heading angle `h` means forward = (sin h, 0, cos h).
+- Characters: `characters/rig/*` is pure (decode, pose eval, anim graph; tested in `tests/rig.test.ts`);
+  `SkinnedCrowd` + `rig/Outfits` render them. Gameplay passes an `AnimState` to `chars.update`.
 - Pure game logic (wanted, economy, missions, weapons, roads) must not import three/rapier
   so it stays unit-testable in Node. Rendering/physics adapters live beside it.
 - Never allocate in per-frame hot paths: reuse module-level scratch `Vector3`/`Quaternion`
@@ -35,5 +39,6 @@ Read `PLAN.md` first: §0 tracks milestone progress, §11 logs deviations.
 
 ## Debug
 - `window.__game` exposes the running Game (stats, teleport, spawn helpers) in all builds.
+  `__game.lineup()` spawns a row of characters, each with a random outfit and a different animation (visual QA).
 - URL params: `?quality=low|med|high`, `?seed=N`, `?debug=1` (FPS/draw-call overlay),
   `?test=1` (M1 test area instead of full world), `?mission=<id>` (start mission).

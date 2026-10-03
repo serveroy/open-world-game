@@ -295,7 +295,7 @@ export class VehicleController {
     p.prevPos.copy(p.pos);
     p.yaw = _e.y;
     const showBody = !(g.cam.mode === 'hood');
-    if (showBody) g.chars.update(p.slot, _v.x, _v.y, _v.z, _e.y, this.seatPose, 'none');
+    if (showBody) g.chars.update(p.slot, _v.x, _v.y, _v.z, _e.y, this.seatPose, 'none', this.anim);
     else g.chars.hide(p.slot);
     // camera
     const size = clamp(v.def.length / 4.6, 0.7, 2.4);

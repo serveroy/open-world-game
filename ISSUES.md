@@ -8,6 +8,9 @@ This file tracks open issues, tagged by severity:
 
 ✅ = fixed (kept for history).
 
+## Fixed in the characters round
+- [x] ✅ 🟠 **Blocky box people.** Characters are now skinned human bodies (male and female) with motion-captured animation from the CC0 Quaternius Universal Animation Library: walk, jog, sprint, crouch, swim, jump and land, two-handed aiming that follows the aim pitch, punches, bat swings, throws, reloads, phone calls, talking, dancing, sitting, driving, hit reactions, knock-downs and getting up. A sculpted head with eyes, nose, ears and lips replaces the mannequin's blank head. Hair, beards, hats, jackets, vests and held weapons are fitted to the skeleton. The shops and barber still recolour and restyle everyone. All characters are drawn in a couple of GPU-instanced draw calls. Ragdolls use the real skeleton (11 bodies, knees and elbows only bend the right way).
+
 ## Fixed in the phone-feedback round
 - [x] ✅ 🔴 **Blurry rendering on phones.** The Low preset capped the render at 1 pixel per CSS pixel, and dynamic resolution dropped to half of that. In landscape inside an app (about 572×307 CSS px at 3×), the world was drawn at roughly a third of the screen's resolution. Rendering now targets a render height per preset (Low 600, Medium 780, High 1080 device px), with a pixel budget and a floor for dynamic resolution (`renderPixelRatio`, unit-tested). iPhones now auto-select Medium, which has MSAA.
 - [x] ✅ 🔴 **Touch controls overlapped each other and the HUD** on short screens. Buttons now scale to fit below the top-right HUD, with separate layouts on foot, in a car, in a boat and in the helicopter. EXIT is no longer under the attack button. The top-right HUD is a compact two-row block. Objective and subtitles moved left of the button cluster. Inside an app frame, everything clears the app header (`html.framed`).
@@ -35,7 +38,8 @@ This file tracks open issues, tagged by severity:
 - [ ] 🟠 **miniplex is only used as an entity index.** Game systems are ordinary classes. This is by design.
 - [ ] 🟠 **Quality preset and shadows still need a restart.**
 - [ ] 🟠 **Story missions were auto-played in headless tests**; a full play-through in a real browser is still needed.
-- [ ] 🟠 **Character, car and building models are procedural and blocky.** See "Art upgrade" below.
+- [ ] 🟠 **Car and building models are procedural and blocky.** See "Art upgrade" below.
+- [ ] 🟡 **Character rendering cost on real phones.** GPU skinning of about 7–9k vertices per visible character. CPU animation measured at about 11 µs per character in a headless desktop browser; check FPS with a crowd on Low and Medium.
 - [ ] 🟡 **FPS on real phones.** Turn on Settings → Graphics → "Show FPS counter" and report numbers on Low, Medium and High.
 - [ ] 🟡 **Audio by ear on iPhone and Android.** Check engine, siren and radio levels, and how good the device voices sound.
 - [ ] 🟡 **Service worker update flow** on a real Vercel or Pages deploy.
@@ -44,7 +48,7 @@ This file tracks open issues, tagged by severity:
 - [ ] ⚪ Race rival pace and rubber-banding need tuning by feel (`Race.ts`, `pace`).
 
 ## Art upgrade (deferred, planned)
-1. **People first**, because you look at the player most. Options: import CC0 rigged low-poly characters (Quaternius "Ultimate Modular Characters" / Kenney), or make the procedural humanoid smoother (rounded limbs, hands, face texture).
+1. ✅ **People.** Done with CC0 motion-capture animation on skinned bodies (see above). Next step: dressed bodies from Quaternius "Ultimate Modular Men/Women" (CC0), rebound to the same skeleton.
 2. **Cars.** Bevelled bodies, wheel arches, separate glass and lights, and a proper paint shader.
 3. **Buildings.** Storefront ground floors, window frames, roof clutter (AC units, water tanks) and a few hero landmarks.
 

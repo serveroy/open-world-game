@@ -84,6 +84,8 @@ export interface AnimState {
   time: number;
   /** Lean into turns (roll), e.g. from angular velocity. */
   lean: number;
+  /** Move direction relative to facing (rad, + = toward the character's left); strafing/backpedalling. */
+  moveYaw?: number;
 }
 
 export function makeAnimState(): AnimState {

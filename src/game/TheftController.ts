@@ -279,7 +279,7 @@ export class TheftController {
       this.pulledAnim.actionT = Math.min(1, this.t / 0.9);
       this.pulledAnim.time += 1 / 60;
       computePose(this.pulledPose, this.pulledAnim);
-      this.game.chars.update(p.slot, p.pos.x, p.pos.y, p.pos.z, p.yaw, this.pulledPose, 'none');
+      this.game.chars.update(p.slot, p.pos.x, p.pos.y, p.pos.z, p.yaw, this.pulledPose, 'none', this.pulledAnim);
     }
     if (this.mode === 'lockpick' && this.lock) {
       this.needleEl.style.left = `calc(${(this.lock.needle * 100).toFixed(1)}% - 2px)`;

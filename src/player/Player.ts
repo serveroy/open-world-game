@@ -360,11 +360,13 @@ export class Player {
     const turn = angleDiff(this.lastYaw, this.yaw) / Math.max(dt, 1e-4);
     this.lastYaw = this.yaw;
     a.lean = clamp(-turn * 0.03 * Math.min(1, hs / 5), -0.25, 0.25);
+    // direction of travel relative to facing (strafing / backpedalling while aiming)
+    a.moveYaw = hs > 0.3 ? angleDiff(this.yaw, Math.atan2(this.vel.x, this.vel.z)) : 0;
     advancePhase(a, dt);
     computePose(this.targetPose, a);
     blendPose(this.pose, this.targetPose, dampFactor(a.action !== 'none' ? 30 : 16, dt));
     const swimBob = this.swimming ? Math.sin(a.time * 2.2) * 0.04 : 0;
-    this.chars.update(this.slot, this.renderPos.x, this.renderPos.y + swimBob, this.renderPos.z, this.yaw, this.pose, this.swimming ? 'none' : this.held);
+    this.chars.update(this.slot, this.renderPos.x, this.renderPos.y + swimBob, this.renderPos.z, this.yaw, this.pose, this.swimming ? 'none' : this.held, a);
   }
   private lastYaw = 0;
 

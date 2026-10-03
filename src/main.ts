@@ -4,6 +4,8 @@ import { Game } from './game/Game';
 import { params } from './core/params';
 import { TIPS } from './data/tips';
 import { SaveManager } from './game/SaveManager';
+import { decodeRig } from './characters/rig/RigData';
+import charsUrl from './assets/chars.bin?url';
 
 const bar = document.getElementById('boot-bar') as HTMLDivElement;
 const status = document.getElementById('boot-status') as HTMLDivElement;
@@ -20,9 +22,15 @@ function progress(p: number, msg: string): Promise<void> {
 
 async function boot(): Promise<void> {
   await progress(0.1, 'Initialising physics');
+  const rigLoad = fetch(charsUrl).then((r) => {
+    if (!r.ok) throw new Error(`characters: HTTP ${r.status}`);
+    return r.arrayBuffer();
+  });
   await RAPIER.init();
+  await progress(0.2, 'Loading characters');
+  const rig = decodeRig(await rigLoad);
   await progress(0.3, 'Starting engine');
-  const game = new Game(document.getElementById('app')!);
+  const game = new Game(document.getElementById('app')!, rig);
   (window as unknown as { __game: unknown }).__game = game;
   if (params.test) {
     await progress(0.8, 'Building test area');

@@ -2,79 +2,119 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { Physics } from '../physics/Physics';
 import { GROUPS } from '../physics/groups';
-import type { CharacterRenderer, HeldItem } from './CharacterRenderer';
-import { SK } from './CharacterRenderer';
-import { makePose } from './Pose';
+import { RAGDOLL_BONES, type CharacterRenderer, type RagdollPose } from './CharacterRenderer';
+import { mulQ, rotate } from './rig/RigData';
 
 /**
- * 7-body physical ragdoll: pelvis, torso, head, 2 arms, 2 legs (spherical joints).
- * Body frames coincide with CharacterRenderer joint frames so matrices map 1:1.
+ * 11-body physical ragdoll built on the skeleton: pelvis, chest, head, upper/lower arms, thighs, calves.
+ * Bodies start exactly at the bones' world transforms; elbows and knees are limited hinges, the rest
+ * ball joints. The renderer drives those bones from the bodies; hands, feet and fingers follow.
  */
+
+/** Parent body per ragdoll body (−1 = none). */
+const PARENT = [-1, 0, 1, 1, 3, 1, 5, 0, 7, 0, 9];
+/** Child bone whose origin ends each limb segment (for capsule length). */
+const CHILD: Record<string, string> = { upperarm_l: 'lowerarm_l', lowerarm_l: 'hand_l', upperarm_r: 'lowerarm_r', lowerarm_r: 'hand_r', thigh_l: 'calf_l', calf_l: 'foot_l', thigh_r: 'calf_r', calf_r: 'foot_r' };
+const HINGE = new Set(['lowerarm_l', 'lowerarm_r', 'calf_l', 'calf_r']);
+
+const _p = new Float32Array(3);
+
 export class Ragdoll {
   bodies: RAPIER.RigidBody[] = [];
   private joints: RAPIER.ImpulseJoint[] = [];
-  readonly mats: THREE.Matrix4[] = Array.from({ length: 7 }, () => new THREE.Matrix4());
+  readonly pose: RagdollPose = { p: new Float32Array(RAGDOLL_BONES.length * 3), q: new Float32Array(RAGDOLL_BONES.length * 4) };
   frozen = false;
   calm = 0;
   age = 0;
   owner: unknown;
 
-  constructor(private physics: Physics, readonly slot: number, frames: THREE.Matrix4[], vel: THREE.Vector3, owner: unknown) {
+  constructor(private physics: Physics, readonly slot: number, chars: CharacterRenderer, vel: THREE.Vector3, owner: unknown) {
     this.owner = owner;
     const w = physics.world;
-    const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-    const mk = (i: number, desc: RAPIER.ColliderDesc, density: number): RAPIER.RigidBody => {
-      frames[i]!.decompose(p, q, s);
-      const b = w.createRigidBody(
+    const rig = chars.rig;
+    const pl = chars.placement(slot);
+    const body = rig.bodies[pl.body]!;
+    const s = pl.scale;
+    const hy = Math.sin(pl.yaw / 2), hw = Math.cos(pl.yaw / 2);
+    const idx = RAGDOLL_BONES.map((n) => rig.bone(n));
+    // world transforms of the ragdoll bones from the last animated pose
+    idx.forEach((b, k) => {
+      const m = pl.model;
+      mulQ(0, hy, 0, hw, m.q[b * 4]!, m.q[b * 4 + 1]!, m.q[b * 4 + 2]!, m.q[b * 4 + 3]!, this.pose.q, k * 4);
+      rotate(0, hy, 0, hw, m.p[b * 3]! * s, m.p[b * 3 + 1]! * s, m.p[b * 3 + 2]! * s, _p, 0);
+      this.pose.p[k * 3] = _p[0]! + pl.x;
+      this.pose.p[k * 3 + 1] = _p[1]! + pl.y;
+      this.pose.p[k * 3 + 2] = _p[2]! + pl.z;
+    });
+    const restLen = (child: string): number => {
+      const c = rig.bone(child);
+      return Math.hypot(body.restT[c * 3]!, body.restT[c * 3 + 1]!, body.restT[c * 3 + 2]!) * s;
+    };
+    RAGDOLL_BONES.forEach((name, k) => {
+      const p = this.pose.p, q = this.pose.q;
+      const rb = w.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
-          .setTranslation(p.x, p.y, p.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+          .setTranslation(p[k * 3]!, p[k * 3 + 1]!, p[k * 3 + 2]!)
+          .setRotation({ x: q[k * 4]!, y: q[k * 4 + 1]!, z: q[k * 4 + 2]!, w: q[k * 4 + 3]! })
           .setLinvel(vel.x, vel.y, vel.z)
           .setLinearDamping(0.15)
-          .setAngularDamping(1.6)
-          .setCcdEnabled(i < 2),
+          .setAngularDamping(1.8)
+          .setCcdEnabled(k < 2),
       );
-      const c = w.createCollider(desc.setDensity(density).setCollisionGroups(GROUPS.ragdoll).setFriction(0.9).setRestitution(0.05), b);
-      physics.setOwner(c, { kind: 'ragdoll', ref: owner, part: i });
-      this.bodies.push(b);
-      return b;
-    };
-    const pelvis = mk(0, RAPIER.ColliderDesc.cuboid(0.16, 0.1, 0.1).setTranslation(0, -0.04, 0), 900);
-    const torso = mk(1, RAPIER.ColliderDesc.capsule(0.13, 0.15).setTranslation(0, 0.27, 0), 700);
-    const head = mk(2, RAPIER.ColliderDesc.ball(0.12).setTranslation(0, SK.headY, 0), 600);
-    const armL = mk(3, RAPIER.ColliderDesc.capsule(0.22, 0.05).setTranslation(0, -0.27, 0), 700);
-    const armR = mk(4, RAPIER.ColliderDesc.capsule(0.22, 0.05).setTranslation(0, -0.27, 0), 700);
-    const legL = mk(5, RAPIER.ColliderDesc.capsule(0.36, 0.075).setTranslation(0, -0.44, 0), 900);
-    const legR = mk(6, RAPIER.ColliderDesc.capsule(0.36, 0.075).setTranslation(0, -0.44, 0), 900);
-    const J = (a: RAPIER.RigidBody, b: RAPIER.RigidBody, ax: number, ay: number, az: number): void => {
-      // anchor in body a's frame; body b's origin is the joint
-      this.joints.push(w.createImpulseJoint(RAPIER.JointData.spherical({ x: ax, y: ay, z: az }, { x: 0, y: 0, z: 0 }), a, b, true));
-    };
-    J(pelvis, torso, 0, SK.spineUp, 0);
-    J(torso, head, 0, SK.torsoH, 0);
-    J(torso, armL, SK.shoulderX, SK.shoulderY, 0);
-    J(torso, armR, -SK.shoulderX, SK.shoulderY, 0);
-    J(pelvis, legL, SK.hipX, SK.hipY, 0);
-    J(pelvis, legR, -SK.hipX, SK.hipY, 0);
+      let desc: RAPIER.ColliderDesc;
+      let density = 900;
+      if (name === 'pelvis') desc = RAPIER.ColliderDesc.cuboid(0.14 * s, 0.09 * s, 0.1 * s);
+      else if (name === 'spine_02') {
+        desc = RAPIER.ColliderDesc.capsule(0.12 * s, 0.13 * s).setTranslation(0, 0.12 * s, 0);
+        density = 700;
+      } else if (name === 'Head') {
+        desc = RAPIER.ColliderDesc.ball(0.11 * s).setTranslation(0, 0.1 * s, 0.02 * s);
+        density = 600;
+      } else {
+        const len = restLen(CHILD[name]!) + (name.startsWith('lowerarm') ? 0.07 * s : name.startsWith('calf') ? 0.05 * s : 0);
+        const r = (name.startsWith('upperarm') ? 0.05 : name.startsWith('lowerarm') ? 0.042 : name.startsWith('thigh') ? 0.075 : 0.058) * s;
+        desc = RAPIER.ColliderDesc.capsule(Math.max(0.02, len / 2 - r), r).setTranslation(0, len / 2, 0);
+        density = name.startsWith('thigh') || name.startsWith('calf') ? 950 : 700;
+      }
+      const c = w.createCollider(desc.setDensity(density).setCollisionGroups(GROUPS.ragdoll).setFriction(0.9).setRestitution(0.05), rb);
+      physics.setOwner(c, { kind: 'ragdoll', ref: owner, part: k });
+      this.bodies.push(rb);
+    });
+    // joints: anchor at the child's origin, expressed in the parent body's frame
+    RAGDOLL_BONES.forEach((name, k) => {
+      const pk = PARENT[k]!;
+      if (pk < 0) return;
+      const P = this.pose.p, Q = this.pose.q;
+      rotate(-Q[pk * 4]!, -Q[pk * 4 + 1]!, -Q[pk * 4 + 2]!, Q[pk * 4 + 3]!, P[k * 3]! - P[pk * 3]!, P[k * 3 + 1]! - P[pk * 3 + 1]!, P[k * 3 + 2]! - P[pk * 3 + 2]!, _p, 0);
+      const a1 = { x: _p[0]!, y: _p[1]!, z: _p[2]! }, a2 = { x: 0, y: 0, z: 0 };
+      let j: RAPIER.ImpulseJoint;
+      if (HINGE.has(name)) {
+        j = w.createImpulseJoint(RAPIER.JointData.revolute(a1, a2, { x: 1, y: 0, z: 0 }), this.bodies[pk]!, this.bodies[k]!, true);
+        (j as RAPIER.RevoluteImpulseJoint).setLimits(-0.05, name.startsWith('calf') ? 2.3 : 2.5);
+      } else j = w.createImpulseJoint(RAPIER.JointData.spherical(a1, a2), this.bodies[pk]!, this.bodies[k]!, true);
+      j.setContactsEnabled(false);
+      this.joints.push(j);
+    });
     this.read();
   }
 
-  /** Apply an impulse to a body part (e.g. bullet hit). */
+  /** Apply an impulse to a body part (e.g. bullet hit). Part 1 = chest, 2 = head. */
   impulse(part: number, x: number, y: number, z: number): void {
-    this.bodies[Math.max(0, Math.min(6, part))]?.applyImpulse({ x, y, z }, true);
+    this.bodies[Math.max(0, Math.min(this.bodies.length - 1, part))]?.applyImpulse({ x, y, z }, true);
   }
 
   read(): void {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < this.bodies.length; i++) {
       const b = this.bodies[i]!;
       const t = b.translation(), r = b.rotation();
-      this.mats[i]!.compose(new THREE.Vector3(t.x, t.y, t.z), new THREE.Quaternion(r.x, r.y, r.z, r.w), new THREE.Vector3(1, 1, 1));
+      this.pose.p[i * 3] = t.x; this.pose.p[i * 3 + 1] = t.y; this.pose.p[i * 3 + 2] = t.z;
+      this.pose.q[i * 4] = r.x; this.pose.q[i * 4 + 1] = r.y; this.pose.q[i * 4 + 2] = r.z; this.pose.q[i * 4 + 3] = r.w;
     }
   }
 
   /** Pelvis world position. */
   position(out: THREE.Vector3): THREE.Vector3 {
-    return out.setFromMatrixPosition(this.mats[0]!);
+    return out.set(this.pose.p[0]!, this.pose.p[1]!, this.pose.p[2]!);
   }
 
   update(dt: number): void {
@@ -109,14 +149,19 @@ export class Ragdoll {
 /** Manages active ragdolls (max N simulated; oldest frozen first). */
 export class RagdollSystem {
   readonly list: Ragdoll[] = [];
-  private readonly idle = makePose();
-  constructor(private physics: Physics, private chars: CharacterRenderer, private maxActive = 6) {}
+  private readonly fixed: Uint8Array;
+  private readonly boneIdx: number[];
+  constructor(private physics: Physics, private chars: CharacterRenderer, private maxActive = 6) {
+    this.boneIdx = RAGDOLL_BONES.map((n) => chars.rig.bone(n));
+    this.fixed = new Uint8Array(chars.rig.boneNames.length);
+    for (const b of this.boneIdx) this.fixed[b] = 1;
+  }
 
   spawn(slot: number, vel: THREE.Vector3, owner: unknown): Ragdoll {
     this.remove(slot);
     const active = this.list.filter((r) => !r.frozen);
     if (active.length >= this.maxActive) active[0]!.freeze();
-    const r = new Ragdoll(this.physics, slot, this.chars.framesOf(slot), vel, owner);
+    const r = new Ragdoll(this.physics, slot, this.chars, vel, owner);
     this.list.push(r);
     return r;
   }
@@ -138,7 +183,7 @@ export class RagdollSystem {
     for (const r of this.list) {
       r.update(dt);
       if (!r.frozen && (r.calm > 1.5 || r.age > 12)) r.freeze();
-      this.chars.update(r.slot, 0, 0, 0, 0, this.idle, 'none' as HeldItem, r.mats);
+      this.chars.updateRagdoll(r.slot, r.pose, this.fixed, this.boneIdx);
     }
   }
 }

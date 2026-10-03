@@ -4,6 +4,10 @@ export class Rng {
   constructor(seed = 1) {
     this.s = seed >>> 0 || 0x9e3779b9;
   }
+  /** Reset the generator state (tests / replays). */
+  seed(seed: number): void {
+    this.s = seed >>> 0 || 0x9e3779b9;
+  }
   /** Float in [0, 1). */
   next(): number {
     let t = (this.s = (this.s + 0x6d2b79f5) >>> 0);

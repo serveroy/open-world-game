@@ -2,6 +2,8 @@
 
 > Original, mobile-first, open-world action-crime game for the browser.
 > 100% original IP: no real brands, logos, cities, or characters from existing franchises.
+> **Status: all milestones M0–M9 complete.** Resume from §0 for follow-up work.
+>
 > Engine: Vite + TypeScript (strict) + Three.js (WebGL2) + Rapier physics + miniplex ECS.
 
 ---
@@ -11,15 +13,15 @@
 | Milestone | Status | Notes |
 |-----------|--------|-------|
 | M0 Plan + scaffold + build pipeline | ✅ done | build/test/smoke pipeline green |
-| M1 Player controller, camera, touch controls, test area | ⬜ todo | |
-| M2 World streaming, districts, roads, lighting, day/night, weather | ⬜ todo | |
-| M3 Vehicles: models, handling, damage, traffic AI | ⬜ todo | |
-| M4 Pedestrians + carjacking & theft | ⬜ todo | |
-| M5 Weapons, shooting, melee, ragdolls | ⬜ todo | |
-| M6 Police & wanted system | ⬜ todo | |
-| M7 Mission system + full story, desert & sea content | ⬜ todo | |
-| M8 Economy, properties, shops, side activities, phone UI | ⬜ todo | |
-| M9 Audio, polish, perf tuning, PWA, Vercel, README | ⬜ todo | |
+| M1 Player controller, camera, touch controls, test area | ✅ done | `?test=1` sandbox: vault/climb/swim/cover verified via smoke |
+| M2 World streaming, districts, roads, lighting, day/night, weather | ✅ done | ~120 draw calls downtown (High), 1 draw call per chunk via world shader |
+| M3 Vehicles: models, handling, damage, traffic AI | ✅ done | 18 procedural vehicles; handling + traffic AI unit-tested headless; radio & engine audio in M9 |
+| M4 Pedestrians + carjacking & theft | ✅ done | instanced peds with routines & reactions; carjack, smash, lockpick mini-game, alarms, hot cars |
+| M5 Weapons, shooting, melee, ragdolls | ✅ done | 10 weapons, wheel, lock-on/swipe/gyro aim, throwables + fire zones, 7-body ragdolls, wasted flow; gun shop in M8 |
+| M6 Police & wanted system | ✅ done | wanted logic unit-tested; foot cops (arrest/cover/flank), cruisers (route pursuit, ram/PIT), roadblocks + spikes, SWAT, spotlight heli, search cones |
+| M7 Mission system + full story, desert & sea content | ✅ done | JSON missions (23 incl. 2 endings) schema-validated & auto-played in tests; runner w/ checkpoints, fail/retry, cutscenes, choices |
+| M8 Economy, properties, shops, side activities, phone UI | ✅ done | Estate (4 safehouses + garages, 5 businesses), 6 shop types, 3 races, taxi/delivery/theft/rampage, street events, 30 shells, clubs, phone, settings + HUD editor, title/pause, IndexedDB saves |
+| M9 Audio, polish, perf tuning, PWA, Vercel, README | ✅ done | Procedural SFX bank (offline-rendered → Howler, spatial), live engines/sirens/horns/alarms/skids/ambience, 3 generative radio stations; High-preset bloom/vignette/grain; SW registration; ECS index; README; ~130–170 draw calls on High, 1.9 MB gzipped |
 
 **Resume rule:** if a session ends, open this table, find the first milestone that is not ✅,
 read its acceptance criteria in §9 and the "Deviations & Notes" log in §11, then continue.
@@ -392,5 +394,59 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
 
 ## 11. Deviations & Notes Log
 - (M0) Pinned TypeScript 5.9 / Vite 7 / Vitest 3 (newer majors available but less proven).
+- (M2) WATER_Y = −1 m (city ground at 0) to avoid z-fighting; Rapier heightfield uses the
+  anti-diagonal triangle split — `Terrain.sample` and chunk meshes match it (unit-tested).
+- (M2) Static world (terrain, roads, sidewalks, buildings) is merged into ONE mesh per 200 m
+  chunk using a patched standard material (procedural windows via `uvm`/`wparams`, `flat`
+  varyings to avoid hash flicker). Far terrain + skyline are single meshes whose vertices are
+  collapsed for loaded chunks via a 16×12 mask texture (no z-fighting with near chunks).
+- (M3) Rapier user forces persist between steps → vehicles call `resetForces/resetTorques`
+  at the start of every fixed step. Positive Rapier wheel steering turns left (we negate).
+- (M3) Car-vs-human hits use OBB proximity tests (no physical contact), so cars never stop
+  dead against a kinematic capsule. Breakable props become short-lived debris bodies.
+- (M3) Car radio & engine audio are implemented with the audio milestone (M9).
+- (M6) Police helicopter uses velocity-steered flight (not the player heli PD controller) for
+  stable orbiting; foot cops are moved by PoliceManager (ped state `scripted`).
+- (M7) Missions live in `src/data/missions/act{1,2,3}.json`; `MissionRunner` is pure and driven by
+  `MissionManager` (the MissionHost). Checkpoint sections must be self-contained (spawn what they
+  need after the checkpoint) — retry resumes right after the checkpoint step.
+- (M8) Club interiors are a stylised full-screen overlay (animated lights + crowd) rather than
+  3D interiors: keeps draw calls/memory flat and the adult VIP option strictly off-screen (fade
+  to black, time skip). Dance mini-game is DOM-driven (keyboard / D-pad / touch pads).
+- (M8) Mid-game "Load" and "New Game" reload the page with a sessionStorage flag so every system
+  starts from clean state; loading from the title screen applies the save in place.
+- (M8) Side activities reuse MissionManager's tagged spawning (`spawnWave`, `makeHostile`) for
+  rampages/muggers; one activity runs at a time and blocks story mission starts.
+- (M8) Saves: IndexedDB `crimson-coast/saves` (auto + 3 manual slots), localStorage then memory
+  fallback; auto-save on mission pass, purchases, collectibles, every 3 min of safe free roam and
+  when the tab is hidden. `?play=1` skips the title (used by screenshot scripts).
+- (M9) Simulation stays in explicit System classes; miniplex is the shared entity index (every
+  vehicle/ped registered on spawn, tag components `siren`/`hostile`) used for cross-system
+  queries (audio voice assignment). Full ECS migration judged not worth the regression risk.
+- (M9) Sound effects are synthesised in an OfflineAudioContext at boot, WAV-encoded and played via
+  Howler (pooling + spatial panners); continuous sounds (engines, sirens, radio, ambience) are live
+  Web Audio graphs on Howler's AudioContext so one master volume/unlock covers everything.
+- (M9) Post FX (UnrealBloom + grade + OutputPass) only on the High preset; Low/Med render direct.
+- (Post-M9) In-car mix: radio is the foreground (compressed, about −16 dBFS RMS). The player's vehicle goes through a cabin bus that is ducked about 9 dB and muffled while the radio plays. Warning sounds (skids, crashes, guns, sirens, horns) bypass the duck. Levels were tuned against measured bus RMS (`CABIN_UNDER_RADIO`, `RADIO_MAKEUP`).
 - (M0) All art/audio procedural → no KTX2/Draco assets shipped; GLB/meshopt loader path kept
   for future CC0 imports. See CREDITS.md.
+- (Post-M9) Characters: the instanced box humanoids were replaced by dressed, skinned characters with motion-capture animation, all CC0 from Quaternius.
+  - Bodies come from Ultimate Modular Men / Women (16 outfits, head / body / legs / feet parts). Animation comes from Universal Animation Library 1+2 (51 clips).
+  - `scripts/build-characters.mjs` rebinds every part onto the animation skeleton per gender: UAL rest rotations with the modular joint positions, a pelvis offset and a leg-length scale for gait speed. It writes everything to `src/assets/chars.bin` (about 2.6 MB, 1.4 MB gzipped).
+  - Rendering is GPU skinning with instancing. Each character owns a row of skin matrices in a float texture.
+  - Each distinct part combination is merged into one mesh on demand and cached, then drawn once for everyone wearing it. Only combinations near the camera cast shadows.
+  - Clothes, skin and hair are tinted per instance from paint slots baked per material. Faces get painted stubble or a goatee, and arms and neck get tattoos. Hats are fitted to each head, and held items are per-instance variants.
+  - `rig/wardrobe.ts` maps the classic `Appearance` fields onto parts, so the shops, barber, police and SWAT still work.
+  - `AnimGraph` maps `AnimState` to clip layers: speed-matched gait blending, full-body and upper-body cross-fades, and FK overrides for strafing twist and lean.
+  - The mocap jog and sprint have leaping strides (their feet imply about 6 and 9 m/s). Their leg swing is pulled about 30% toward each cycle's average leg pose (`STRIDE`) and the cycles are pinned to 3.9 and 6.9 m/s (`GAIT_SPEED`), so runs keep a natural cadence with planted feet.
+  - The lower-body strafe twist only applies while aiming.
+  - The mocap jog was airborne about 92% of its cycle with a 24 cm bounce, which looked like skipping. The rise above its lowest point is cut to 40% (sprint 60%, `BOUNCE`).
+  - Lowering the body alone made the push-off toe scrape forward along the floor for about 0.1 s per step. `runFit` now precomputes, per body type and run frame, a pelvis curve and a lift per ankle. Two-bone leg IK (`rig/LegIK.ts`, applied in `AnimController.groundFix`) puts a foot sweeping back at ground speed onto the floor and keeps a pushing-off or swinging foot 3 cm clear.
+  - The ground lock (dressed legs are longer than the clips' skeleton) raises a foot that would still dip below the floor by bending that knee. It used to lift the whole body, which jolted the walk upward at every heel strike (vertical acceleration spikes of 17 m/s², versus about 6 from the clip itself).
+  - Result: jog bob 10 cm (sprint 8 cm), planted feet move at about 98% of ground speed, and toes never sink.
+  - On foot, the stick has two gaits instead of a speed ramp: a light push walks at 1.4 m/s, a push past about 2/3 runs at 4.6 m/s (with hysteresis), and full forward sprints. Keyboard: hold Alt to walk. Nearly any walk-range push gives the full walk (a slower walk played the cycle in slow motion).
+  - Dynamic resolution now tests each resolution drop: if the next 1.5 s window isn't at least ~7% faster, the browser is pacing frames (iOS Low Power Mode or a throttled web view caps pages at 30 Hz). It then restores the resolution, holds off for 30 s, and the FPS overlay reports "browser-capped". Before, a 30 Hz cap drove the resolution to its minimum for nothing.
+  - Taxi fares and other seated passengers (`Ped.riding`) are excluded from vehicle-vs-pedestrian hits. The cab used to "run over" its own passenger (they sit at the cab's position) once it passed 2.5 m/s, which was a witnessed hit-and-run and a wanted star. The old ramp passed through a slow-jog band that read as "running slowly".
+  - Actions with no clip (hands up, cower, kick, lockpick, wave, bike) retarget the old procedural `Pose` onto the skeleton (`ProcPose`).
+  - The ragdoll is now 11 bodies on real bones, with hinge-limited elbows and knees.
+  - `__game.lineup()` shows a QA row of animated characters.

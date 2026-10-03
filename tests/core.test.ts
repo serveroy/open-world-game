@@ -81,3 +81,23 @@ describe('EventBus/Pool/SpatialHash', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('ecs index', async () => {
+  const { registerVehicle, unregisterVehicle, registerPed, unregisterPed, vehiclesQ, sirensQ, pedsQ, syncTags, ecs } = await import('../src/ecs/world');
+  it('tracks spawned entities and tag components', () => {
+    const v = { siren: false } as unknown as import('../src/vehicles/Vehicle').Vehicle;
+    const p = { hostile: true, alive: true } as unknown as import('../src/peds/Ped').Ped;
+    registerVehicle(v);
+    registerVehicle(v);
+    registerPed(p);
+    expect(vehiclesQ.entities.length).toBe(1);
+    expect(pedsQ.entities.length).toBe(1);
+    (v as { siren: boolean }).siren = true;
+    syncTags();
+    expect(sirensQ.entities.length).toBe(1);
+    expect(ecs.with('ped', 'hostile').entities.length).toBe(1);
+    unregisterVehicle(v);
+    unregisterPed(p);
+    expect(vehiclesQ.entities.length + pedsQ.entities.length + sirensQ.entities.length).toBe(0);
+  });
+});

@@ -1,0 +1,250 @@
+[
+  {
+    "id": "m01_homecoming",
+    "act": 1,
+    "title": "Homecoming",
+    "giver": "lena",
+    "start": { "x": -100, "z": -672, "radius": 3 },
+    "requires": [],
+    "reward": 300,
+    "hour": 16,
+    "weather": "clear",
+    "summary": "Five years inside. Lena is waiting outside the garage — and someone just took off with her car.",
+    "steps": [
+      { "type": "wanted", "stars": 0, "lock": true },
+      { "type": "spawnPed", "tag": "lena", "x": -103, "z": -677, "yaw": 0, "app": "story:lena", "state": "talk", "health": 400 },
+      { "type": "cutscene", "shots": [{ "orbit": "player", "dist": 9, "height": 4, "angle": 2.4, "dur": 4, "fov": 45 }, { "orbit": "lena", "dist": 3, "height": 1.7, "angle": 0.4, "dur": 4, "fov": 40 }], "lines": [
+        { "who": "Lena", "text": "Five years, Nico. You could've written more than twice.", "dur": 3.5 },
+        { "who": "Nico", "text": "Prison stationery is terrible. You look good, Lena.", "dur": 3.2 },
+        { "who": "Lena", "text": "I look tired. The garage is drowning and somebody keeps 'borrowing' my stuff.", "dur": 3.8 },
+        { "who": "Lena", "text": "Speaking of which — a kid from the Salt Dogs just drove off in my Meridian. Stretch your legs.", "dur": 4.2 }
+      ] },
+      { "type": "goto", "x": -100, "z": -626, "radius": 4, "text": "Walk out to <b>Pipe Lane</b>", "onFoot": true, "help": "Move with the <b>left stick</b> (touch: drag on the left side · keys: <b>WASD</b>). Look around by dragging on the right side or with the mouse." },
+      { "type": "goto", "x": -40, "z": -626, "radius": 5, "text": "Sprint to the corner of <b>Crosstown Ave</b>", "onFoot": true, "help": "Hold <b>»</b> (or <b>Shift</b>) to sprint. Push the stick all the way to sprint automatically. Sprinting uses stamina." },
+      { "type": "help", "text": "Tap <b>⤒</b> (<b>Space</b>) to jump. Sprint into a low wall to <b>vault</b> over it automatically.", "time": 7 },
+      { "type": "spawnVehicle", "tag": "lenaCar", "def": "meridian", "x": 40, "z": -617.5, "yaw": 1.5708, "paint": 9057082, "persistent": true },
+      { "type": "spawnPed", "tag": "joyrider", "x": 43, "z": -612, "yaw": -1.57, "app": "gang", "state": "idle", "health": 60 },
+      { "type": "dialogue", "lines": [{ "who": "Lena", "text": "(phone) That's my car by the curb. Don't let him leave with it.", "dur": 3.4 }] },
+      { "type": "goto", "x": 40, "z": -614, "radius": 8, "text": "Get to <b>Lena's car</b>" },
+      { "type": "pedAction", "tag": "joyrider", "action": "fight" },
+      { "type": "kill", "tag": "joyrider", "text": "Teach the joyrider some manners", "help": "Tap <b>✊</b> (or <b>left click</b>) to punch. Hold <b>◎</b> (<b>right click</b>) to lock on. Tap repeatedly for a combo." },
+      { "type": "enterVehicle", "tag": "lenaCar", "text": "Get in <b>Lena's car</b>", "help": "Tap <b>ENTER</b> (<b>F</b>) near a car. Occupied cars can be jacked; locked cars can be broken into." },
+      { "type": "help", "text": "Drive with <b>▲ gas</b> / <b>▼ brake</b> and steer with the left stick (<b>W/S + A/D</b>). <b>HB</b> (<b>Space</b>) is the handbrake. Follow the purple GPS line on the minimap.", "time": 9 },
+      { "type": "deliver", "tag": "lenaCar", "x": -100, "z": -621, "radius": 9, "text": "Bring the car back to <b>Reyes' Body & Paint</b>", "minHealth": 0.15 },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "Not a scratch. Okay, a few scratches. I'll call it rent.", "dur": 3.4 },
+        { "who": "Lena", "text": "Your old room's still upstairs — the walk-up on Cannery Row. And Nico? Welcome home.", "dur": 4 }
+      ] },
+      { "type": "unlock", "what": "property", "id": "safehouse_rustvale" },
+      { "type": "unlock", "what": "contact", "id": "lena" },
+      { "type": "cash", "amount": 300 }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "lenaCar", "text": "Lena's car was wrecked" }, { "type": "dead", "tag": "lena", "text": "Lena died" }]
+  },
+  {
+    "id": "m02_paintjob",
+    "act": 1,
+    "title": "Paint Job",
+    "giver": "lena",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m01_homecoming"],
+    "reward": 1500,
+    "summary": "Lena's side business: steal three cars off a buyer's list and bring them in for a new coat of paint.",
+    "steps": [
+      { "type": "spawnPed", "tag": "lena", "x": -103, "z": -677, "yaw": 0, "app": "story:lena", "state": "talk", "health": 400 },
+      { "type": "dialogue", "shots": [{ "orbit": "lena", "dist": 3.2, "height": 1.7, "angle": 0.6, "dur": 8 }], "lines": [
+        { "who": "Lena", "text": "Legit work doesn't pay the bills. A buyer in the marina wants three cars, freshly painted, no questions.", "dur": 4.5 },
+        { "who": "Nico", "text": "And you want the guy who just got out of prison to go steal them.", "dur": 3.2 },
+        { "who": "Lena", "text": "I want the best driver in Port Solano to go borrow them. Permanently.", "dur": 3.6 }
+      ] },
+      { "type": "spawnVehicle", "tag": "car1", "def": "stiletto", "x": 100, "z": -484.6, "yaw": -1.5708, "locked": true, "paint": 15737376 },
+      { "type": "enterVehicle", "tag": "car1", "text": "Steal the <b>Stiletto</b> on Freight Avenue", "help": "Locked cars: <b>smash</b> the window (fast, loud) or <b>pick</b> the lock (quiet mini-game). Alarms draw attention." },
+      { "type": "deliver", "tag": "car1", "x": -100, "z": -621, "radius": 9, "text": "Bring the <b>Stiletto</b> to the garage" },
+      { "type": "checkpoint", "x": -100, "z": -630 },
+      { "type": "spawnVehicle", "tag": "car2", "def": "bruiser", "x": -300, "z": 515.4, "yaw": 1.5708, "locked": true, "paint": 1052688 },
+      { "type": "enterVehicle", "tag": "car2", "text": "Steal the <b>Bruiser</b> in Palm Heights" },
+      { "type": "wanted", "stars": 1, "text": "A neighbour called it in!" },
+      { "type": "help", "text": "Break line of sight to start a <b>search</b> — stars flash while cops look for you. Or drive into a <b>respray</b> (✦ on the map) to lose them instantly.", "time": 9 },
+      { "type": "loseWanted", "text": "Lose the cops" },
+      { "type": "deliver", "tag": "car2", "x": -100, "z": -621, "radius": 9, "text": "Bring the <b>Bruiser</b> to the garage" },
+      { "type": "checkpoint", "x": -100, "z": -630 },
+      { "type": "spawnVehicle", "tag": "car3", "def": "aurelia", "x": -594.4, "z": 100, "yaw": 0, "locked": true, "paint": 16742928 },
+      { "type": "enterVehicle", "tag": "car3", "text": "Steal the <b>Aurelia GT</b> on Harbor Street" },
+      { "type": "timer", "time": 240, "label": "Buyer leaves" },
+      { "type": "deliver", "tag": "car3", "x": -100, "z": -621, "radius": 9, "text": "Bring the <b>Aurelia</b> in before the buyer leaves", "minHealth": 0.4 },
+      { "type": "clearTimer" },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "Three for three. You haven't lost it.", "dur": 3 },
+        { "who": "Lena", "text": "The buyer's people work out of the docks. Volk Shipping. They want to meet you.", "dur": 4 }
+      ] },
+      { "type": "unlock", "what": "shop", "id": "respray" }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "car1" }, { "type": "destroyed", "tag": "car2" }, { "type": "destroyed", "tag": "car3" }]
+  },
+  {
+    "id": "m03_dockwork",
+    "act": 1,
+    "title": "Dock Work",
+    "giver": "dima",
+    "start": { "x": -604, "z": -700, "radius": 3.5 },
+    "requires": ["m02_paintjob"],
+    "reward": 2500,
+    "summary": "Dmitri Volk tests the new driver: move a van of 'machine parts' across Rustvale before a rival crew can grab it.",
+    "steps": [
+      { "type": "spawnPed", "tag": "dima", "x": -604, "z": -706, "yaw": -1.57, "app": "story:dima", "state": "talk", "health": 600 },
+      { "type": "dialogue", "shots": [{ "orbit": "dima", "dist": 3.5, "height": 1.8, "angle": 0.8, "dur": 10 }], "lines": [
+        { "who": "Dima", "text": "Reyes. Lena says you can drive. Everybody says they can drive.", "dur": 3.6 },
+        { "who": "Nico", "text": "Everybody isn't me.", "dur": 2 },
+        { "who": "Dima", "text": "The van on Harbor Street. Take it to the scrapyard on Rust Street. Three minutes.", "dur": 4 },
+        { "who": "Dima", "text": "The Salt Dogs have been sniffing around my cargo. If they show up, the cargo arrives anyway.", "dur": 4 }
+      ] },
+      { "type": "spawnVehicle", "tag": "van", "def": "courier", "x": -592.5, "z": -730, "yaw": 3.1416, "paint": 3824266, "persistent": true },
+      { "type": "enterVehicle", "tag": "van", "text": "Get in the <b>Courier van</b>" },
+      { "type": "timer", "time": 180 },
+      { "type": "deliver", "tag": "van", "x": 215, "z": -765, "radius": 10, "text": "Drive the van to <b>Rustvale Scrap</b>", "minHealth": 0.2 },
+      { "type": "clearTimer" },
+      { "type": "spawnGroup", "tag": "dogs", "count": 5, "x": 200, "z": -768, "r": 16, "app": "gang", "weapon": "pistol", "hostile": true, "health": 80 },
+      { "type": "dialogue", "lines": [{ "who": "Nico", "text": "Company. Of course there's company.", "dur": 2.5 }] },
+      { "type": "give", "weapon": "bat" },
+      { "type": "kill", "tag": "dogs", "text": "Deal with the <b>Salt Dogs</b>", "help": "No gun yet? Use the van as cover, or run them down. Hold <b>⊕</b> (<b>Tab</b>) for the weapon wheel." },
+      { "type": "dialogue", "lines": [
+        { "who": "Dima", "text": "(phone) My guys counted the boxes. All there. You're hired, Reyes.", "dur": 3.6 },
+        { "who": "Dima", "text": "Izzy Navarro wants a driver too. Club Halcyon. Tell her I said you're expensive.", "dur": 4 }
+      ] }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "van", "text": "The cargo was destroyed" }, { "type": "dead", "tag": "dima" }]
+  },
+  {
+    "id": "m04_velvetropes",
+    "act": 1,
+    "title": "Velvet Ropes",
+    "giver": "izzy",
+    "start": { "x": -545, "z": 245, "radius": 3.5 },
+    "requires": ["m03_dockwork"],
+    "reward": 2000,
+    "hour": 22,
+    "summary": "Izzy Navarro needs a courier followed through Velvet Row without being seen.",
+    "steps": [
+      { "type": "spawnPed", "tag": "izzy", "x": -550, "z": 248, "yaw": 1.57, "app": "story:izzy", "state": "talk", "health": 400 },
+      { "type": "dialogue", "shots": [{ "orbit": "izzy", "dist": 3, "height": 1.7, "angle": -0.6, "dur": 10, "fov": 42 }], "lines": [
+        { "who": "Izzy", "text": "So you're the famous Reyes. Dima says you're expensive. I say prove it.", "dur": 4 },
+        { "who": "Izzy", "text": "Someone's moving envelopes out of my club every Thursday. Tonight a courier on a bike carries one.", "dur": 4.5 },
+        { "who": "Izzy", "text": "Follow him. Don't get close, don't lose him. I want to know who he's paying.", "dur": 3.8 }
+      ] },
+      { "type": "spawnVehicle", "tag": "courier", "def": "wasp", "x": -487.4, "z": 280, "yaw": 3.1416, "driver": "thug", "paint": 2140368, "persistent": true },
+      { "type": "enterAny", "text": "Get a <b>vehicle</b>", "help": "Any car will do — tap <b>JACK</b> near an occupied one." },
+      { "type": "follow", "tag": "courier", "text": "Tail the <b>courier</b> — keep your distance", "route": [[-490, 280], [-490, 20], [-400, 20], [-400, -160], [-220, -160], [-220, -340], [-40, -340], [-40, -470]], "speed": 13, "minDist": 14, "maxDist": 100 },
+      { "type": "spawnGroup", "tag": "bagmen", "count": 2, "x": -45, "z": -476, "r": 3, "app": "cop", "state": "idle" },
+      { "type": "cutscene", "shots": [{ "orbit": "courier", "dist": 14, "height": 6, "angle": 2.2, "dur": 6, "fov": 35 }], "lines": [
+        { "who": "Nico", "text": "Cops. The envelope's going to cops.", "dur": 3 },
+        { "who": "Izzy", "text": "(phone) Price's people. Of course. Get out of there before they make you.", "dur": 4 }
+      ] },
+      { "type": "despawn", "tag": "bagmen" },
+      { "type": "despawn", "tag": "courier" },
+      { "type": "goto", "x": -545, "z": 245, "radius": 5, "text": "Return to <b>Club Halcyon</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Izzy", "text": "Captain Harlan Price. Half the city pays him and the other half is scared of him.", "dur": 4.2 },
+        { "who": "Izzy", "text": "You did good, Reyes. Come back when you've got something louder than a car.", "dur": 3.6 }
+      ] }
+    ],
+    "fail": [{ "type": "dead", "tag": "izzy" }]
+  },
+  {
+    "id": "m05_shotsfired",
+    "act": 1,
+    "title": "Shots Fired",
+    "giver": "lena",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m04_velvetropes"],
+    "reward": 3000,
+    "summary": "The Salt Dogs stripped Lena's parts truck. Time to get a real gun and get the parts back.",
+    "steps": [
+      { "type": "spawnPed", "tag": "lena", "x": -103, "z": -677, "yaw": 0, "app": "story:lena", "state": "talk", "health": 400 },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "The Salt Dogs hit my parts delivery. Every transmission I owned.", "dur": 3.6 },
+        { "who": "Lena", "text": "Iron & Ember on 2nd Street owes me a favour. Get yourself something that goes bang.", "dur": 4 }
+      ] },
+      { "type": "goto", "x": 15, "z": -196, "radius": 3, "text": "Go to <b>Iron & Ember</b> gun shop", "onFoot": false },
+      { "type": "give", "weapon": "pistol", "ammo": 96 },
+      { "type": "armor", "amount": 50 },
+      { "type": "dialogue", "lines": [
+        { "who": "Ember", "text": "Lena's brother? On the house. Viper nine-mil and a vest. Don't make me regret it.", "dur": 4 }
+      ] },
+      { "type": "help", "text": "Hold <b>◎</b> (<b>right click</b>) to aim — auto-aim locks onto the nearest target. <b>Swipe</b> (or <b>T</b>) to switch targets. <b>⟳</b> (<b>R</b>) reloads. Tap <b>▣</b> (<b>Q</b>) next to a wall to take cover.", "time": 10 },
+      { "type": "checkpoint", "x": 15, "z": -190 },
+      { "type": "goto", "x": -300, "z": -628, "radius": 30, "text": "Find the Salt Dogs on <b>Pipe Lane</b>" },
+      { "type": "spawnGroup", "tag": "dogs", "count": 6, "x": -310, "z": -622, "r": 14, "app": "gang", "weapon": "pistol", "hostile": true, "health": 70 },
+      { "type": "kill", "tag": "dogs", "text": "Take out the <b>Salt Dogs</b>" },
+      { "type": "collect", "items": [[-322, -620], [-300, -616], [-286, -624]], "text": "Recover Lena's <b>parts</b>", "tag": "parts" },
+      { "type": "goto", "x": -100, "z": -625, "radius": 6, "text": "Bring the parts back to the garage" },
+      { "type": "dialogue", "lines": [{ "who": "Lena", "text": "You brought back my transmissions AND a body count. Mom would be so proud.", "dur": 3.8 }] },
+      { "type": "unlock", "what": "shop", "id": "gunshop" }
+    ],
+    "fail": [{ "type": "dead", "tag": "lena" }]
+  },
+  {
+    "id": "m06_hotpursuit",
+    "act": 1,
+    "title": "Hot Pursuit",
+    "giver": "juno",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m05_shotsfired"],
+    "reward": 4000,
+    "summary": "Juno needs the radio from a police Interceptor. The only way to get one is to take the whole car — from Police HQ.",
+    "steps": [
+      { "type": "spawnPed", "tag": "juno", "x": -97, "z": -676, "yaw": 0, "app": "story:juno", "state": "talk", "health": 300 },
+      { "type": "dialogue", "shots": [{ "orbit": "juno", "dist": 2.6, "height": 1.5, "angle": 0.5, "dur": 8 }], "lines": [
+        { "who": "Juno", "text": "Hi! Juno. I do Lena's radios. And sometimes other people's radios.", "dur": 3.6 },
+        { "who": "Juno", "text": "If we had a police unit's encryption chip, we'd hear Price's dispatch before he does.", "dur": 4 },
+        { "who": "Nico", "text": "Let me guess. The chip is inside a police car.", "dur": 2.6 },
+        { "who": "Juno", "text": "Inside a police car parked at Police Headquarters. Have fun!", "dur": 3.2 }
+      ] },
+      { "type": "spawnVehicle", "tag": "cruiser", "def": "interceptor", "x": -297, "z": -86, "yaw": 1.5708, "paint": 1053720, "persistent": true },
+      { "type": "goto", "x": -297, "z": -80, "radius": 15, "text": "Go to <b>Solano PD Headquarters</b>" },
+      { "type": "enterVehicle", "tag": "cruiser", "text": "Steal the <b>Interceptor</b>" },
+      { "type": "wanted", "stars": 3, "text": "Every cop in the city is coming" },
+      { "type": "help", "text": "Roadblocks and spike strips appear at ★★★. Cut through alleys and break line of sight.", "time": 7 },
+      { "type": "loseWanted", "text": "Lose the cops" },
+      { "type": "deliver", "tag": "cruiser", "x": -100, "z": -621, "radius": 9, "text": "Bring the Interceptor to the garage" },
+      { "type": "dialogue", "lines": [
+        { "who": "Juno", "text": "Ooh, still warm. Give me ten minutes and we'll be listening to Price's channel.", "dur": 3.8 }
+      ] },
+      { "type": "unlock", "what": "contact", "id": "juno" }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "cruiser", "text": "The Interceptor was destroyed" }]
+  },
+  {
+    "id": "m07_theghost",
+    "act": 1,
+    "title": "The Ghost",
+    "giver": "izzy",
+    "start": { "x": -545, "z": 245, "radius": 3.5 },
+    "requires": ["m06_hotpursuit"],
+    "reward": 5000,
+    "hour": 23,
+    "summary": "Izzy has a photo of a man at The Ember Room. A man who died five years ago.",
+    "steps": [
+      { "type": "spawnPed", "tag": "izzy", "x": -550, "z": 248, "yaw": 1.57, "app": "story:izzy", "state": "talk", "health": 400 },
+      { "type": "dialogue", "lines": [
+        { "who": "Izzy", "text": "One of my girls took this at The Ember Room an hour ago. Recognise him?", "dur": 4 },
+        { "who": "Nico", "text": "...That's Theo. Theo Marsh. Theo died on the Westbank job.", "dur": 3.6 },
+        { "who": "Izzy", "text": "Then he's having a very good afterlife. He's still there. Go.", "dur": 3.2 }
+      ] },
+      { "type": "goto", "x": -545, "z": -200, "radius": 6, "text": "Get to <b>The Ember Room</b>" },
+      { "type": "spawnVehicle", "tag": "theo", "def": "aurelia", "x": -586.6, "z": -205, "yaw": 3.1416, "driver": "story:theo", "paint": 16777215, "persistent": true },
+      { "type": "cutscene", "shots": [{ "orbit": "theo", "dist": 8, "height": 2.5, "angle": 1, "dur": 4, "fov": 40 }], "lines": [
+        { "who": "Nico", "text": "THEO!", "dur": 1.5 },
+        { "who": "Theo", "text": "...Nico? No. No no no.", "dur": 2.4 }
+      ] },
+      { "type": "enterAny", "text": "Get a <b>car</b> — he's getting away!" },
+      { "type": "chase", "tag": "theo", "text": "Chase <b>Theo</b>", "route": [[-590, -205], [-590, -340], [-220, -340], [-220, 20], [-40, 20], [-40, 380], [270, 380], [270, 20], [380, 18], [520, -20], [650, -60]], "speed": 24, "escape": true, "maxDist": 260 },
+      { "type": "despawn", "tag": "theo" },
+      { "type": "dialogue", "lines": [
+        { "who": "Nico", "text": "He's gone. Five years I did for that job, and he was alive the whole time.", "dur": 4 },
+        { "who": "Izzy", "text": "(phone) My people saw him heading out Route 9. Into the desert. Ask yourself who he was running to.", "dur": 4.4 },
+        { "who": "Nico", "text": "Sal. Old Sal's in Dustwater.", "dur": 2.4 }
+      ] },
+      { "type": "unlock", "what": "contact", "id": "sal" }
+    ]
+  }
+]

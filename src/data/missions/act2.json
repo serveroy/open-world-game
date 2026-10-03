@@ -1,0 +1,284 @@
+[
+  {
+    "id": "m08_route9",
+    "act": 2,
+    "title": "Route 9",
+    "giver": "sal",
+    "start": { "x": 1180, "z": 362, "radius": 3.5 },
+    "requires": ["m07_theghost"],
+    "reward": 4000,
+    "hour": 17,
+    "weather": "clear",
+    "summary": "Old Sal hasn't seen Theo — or says he hasn't. His nephew Rico wants to race the 'city boy' first.",
+    "steps": [
+      { "type": "spawnPed", "tag": "sal", "x": 1184, "z": 362, "yaw": 3.14, "app": "story:sal", "state": "talk", "health": 600 },
+      { "type": "spawnPed", "tag": "ricoPed", "x": 1176, "z": 360, "yaw": 1.2, "app": "story:rico", "state": "talk" },
+      { "type": "dialogue", "shots": [{ "orbit": "sal", "dist": 4, "height": 1.8, "angle": 0.7, "dur": 10 }], "lines": [
+        { "who": "Sal", "text": "Nico Reyes. Last time I saw you, you couldn't parallel park.", "dur": 3.5 },
+        { "who": "Nico", "text": "Last time I saw you, you taught me to never park at all. Have you seen Theo?", "dur": 4 },
+        { "who": "Sal", "text": "Theo's dead, kid. Let it lie.", "dur": 2.6 },
+        { "who": "Rico", "text": "Tío, this is the famous driver? Race me to Pump 49. Loser buys dinner.", "dur": 3.8 }
+      ] },
+      { "type": "despawn", "tag": "ricoPed" },
+      { "type": "spawnVehicle", "tag": "racer", "def": "stiletto", "x": 1150, "z": 298.4, "yaw": -2.3, "paint": 15790112, "persistent": true },
+      { "type": "spawnVehicle", "tag": "rico", "def": "bruiser", "x": 1150, "z": 306, "yaw": -2.3, "driver": "story:rico", "paint": 14724144, "persistent": true },
+      { "type": "enterVehicle", "tag": "racer", "text": "Get in the <b>Stiletto</b>" },
+      { "type": "cutscene", "shots": [{ "orbit": "racer", "dist": 9, "height": 3, "angle": 0.4, "dur": 3, "fov": 50 }], "lines": [{ "who": "Rico", "text": "3… 2… 1… GO!", "dur": 2.5 }] },
+      { "type": "drive", "tag": "rico", "route": [[1130, 300], [1040, 200], [920, 60], [790, -40], [650, -60], [640, -75]], "speed": 33, "aggressive": true },
+      { "type": "goto", "x": 1040, "z": 200, "radius": 12, "text": "Race to <b>Pump 49</b> — checkpoint 1", "vehicle": true },
+      { "type": "goto", "x": 920, "z": 60, "radius": 12, "text": "Race to <b>Pump 49</b> — checkpoint 2", "vehicle": true },
+      { "type": "goto", "x": 790, "z": -40, "radius": 12, "text": "Race to <b>Pump 49</b> — checkpoint 3", "vehicle": true },
+      { "type": "goto", "x": 645, "z": -70, "radius": 12, "text": "Finish at <b>Pump 49</b>", "vehicle": true },
+      { "type": "dialogue", "lines": [
+        { "who": "Rico", "text": "(phone) You got lucky on the bends. Dinner's on me, I guess.", "dur": 3.4 },
+        { "who": "Sal", "text": "(phone) ...Kid. Theo came through two days ago. He's scared of somebody. Come by again — I'll have work.", "dur": 4.8 }
+      ] },
+      { "type": "unlock", "what": "property", "id": "safehouse_dustwater" }
+    ],
+    "fail": [{ "type": "arrives", "tag": "rico", "text": "Rico won the race" }, { "type": "destroyed", "tag": "racer" }]
+  },
+  {
+    "id": "m09_dustdevils",
+    "act": 2,
+    "title": "Dust Devils",
+    "giver": "sal",
+    "start": { "x": 1180, "z": 362, "radius": 3.5 },
+    "requires": ["m08_route9"],
+    "reward": 6000,
+    "weather": "sandstorm",
+    "hour": 12,
+    "summary": "A convoy of Price's 'evidence trucks' crosses Sal Mesa in a sandstorm. Sal wants what's inside.",
+    "steps": [
+      { "type": "spawnPed", "tag": "sal", "x": 1184, "z": 362, "yaw": 3.14, "app": "story:sal", "state": "talk", "health": 600 },
+      { "type": "dialogue", "lines": [
+        { "who": "Sal", "text": "Twice a month Price moves seized cash out of the city. Two trucks, one escort.", "dur": 4.2 },
+        { "who": "Sal", "text": "Storm's rolling in. They'll be slow and blind. You won't be.", "dur": 3.4 }
+      ] },
+      { "type": "give", "weapon": "smg", "ammo": 180 },
+      { "type": "goto", "x": 920, "z": 60, "radius": 18, "text": "Wait for the convoy on <b>Route 9</b>" },
+      { "type": "spawnVehicle", "tag": "convoy", "def": "courier", "x": 1040, "z": 200, "yaw": -2.4, "driver": "thug", "paint": 2763306, "persistent": true },
+      { "type": "spawnVehicle", "tag": "convoy", "def": "mule", "x": 1068, "z": 232, "yaw": -2.4, "driver": "thug", "paint": 2763306, "persistent": true },
+      { "type": "spawnVehicle", "tag": "escort", "def": "ranger", "x": 1095, "z": 262, "yaw": -2.4, "driver": "thug", "paint": 1052688, "persistent": true },
+      { "type": "drive", "tag": "convoy", "route": [[920, 60], [790, -40], [650, -60], [520, -20], [380, 18], [270, 20]], "speed": 16 },
+      { "type": "drive", "tag": "escort", "route": [[920, 60], [790, -40], [650, -60], [520, -20], [380, 18], [270, 20]], "speed": 16 },
+      { "type": "destroy", "tag": "convoy", "text": "Destroy both <b>trucks</b> before they reach the city" },
+      { "type": "collect", "items": [], "atTag": "convoy", "text": "Grab the <b>cash bags</b> from the wrecks", "tag": "bags" },
+      { "type": "goto", "x": 1180, "z": 345, "radius": 8, "text": "Bring the cash to <b>Sal</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Sal", "text": "Look at that. Price's retirement fund. Half's yours.", "dur": 3.4 },
+        { "who": "Sal", "text": "He'll know someone hit him. Lie low at the Last Chance tomorrow — I'll meet you there.", "dur": 4.2 }
+      ] }
+    ],
+    "fail": [{ "type": "arrives", "tag": "convoy", "text": "The convoy reached the city" }]
+  },
+  {
+    "id": "m10_lastchance",
+    "act": 2,
+    "title": "Last Chance",
+    "giver": "sal",
+    "start": { "x": 1390, "z": -528, "radius": 4 },
+    "requires": ["m09_dustdevils"],
+    "reward": 7000,
+    "hour": 19,
+    "weather": "clear",
+    "summary": "Price figured it out. His dirty cops come for Sal at the Last Chance gas station.",
+    "steps": [
+      { "type": "spawnPed", "tag": "sal", "x": 1388, "z": -536, "yaw": 0, "app": "story:sal", "state": "cower", "health": 900 },
+      { "type": "dialogue", "lines": [
+        { "who": "Sal", "text": "Those aren't customers, kid. Those are Price's boys in borrowed uniforms.", "dur": 4 },
+        { "who": "Sal", "text": "Rifle's behind the counter. I'll keep my head down — I'm too old to be brave.", "dur": 3.8 }
+      ] },
+      { "type": "give", "weapon": "rifle", "ammo": 240 },
+      { "type": "armor", "amount": 100 },
+      { "type": "checkpoint", "x": 1395, "z": -520 },
+      { "type": "survive", "time": 100, "text": "Defend the <b>Last Chance</b>", "waves": [
+        { "at": 0, "tag": "dirty", "count": 4, "x": 1330, "z": -505, "r": 8, "app": "cop", "weapon": "pistol", "vehicle": "interceptor" },
+        { "at": 25, "tag": "dirty", "count": 4, "x": 1470, "z": -390, "r": 8, "app": "cop", "weapon": "smg", "vehicle": "interceptor" },
+        { "at": 55, "tag": "dirty", "count": 5, "x": 1300, "z": -480, "r": 10, "app": "swat", "weapon": "rifle", "vehicle": "enforcer" },
+        { "at": 80, "tag": "dirty", "count": 3, "x": 1460, "z": -500, "r": 8, "app": "cop", "weapon": "shotgun" }
+      ] },
+      { "type": "kill", "tag": "dirty", "text": "Finish off Price's <b>dirty cops</b>" },
+      { "type": "dialogue", "lines": [
+        { "who": "Sal", "text": "That's… a lot of dead cops, Nico. Price won't stop now.", "dur": 3.6 },
+        { "who": "Sal", "text": "Theo hid something on Coral Keys. Dima knows boats. Go see him.", "dur": 3.6 }
+      ] }
+    ],
+    "fail": [{ "type": "dead", "tag": "sal", "text": "Sal was killed" }]
+  },
+  {
+    "id": "m11_coralrun",
+    "act": 2,
+    "title": "Coral Run",
+    "giver": "dima",
+    "start": { "x": -700, "z": 560, "radius": 3.5 },
+    "requires": ["m10_lastchance"],
+    "reward": 7500,
+    "hour": 10,
+    "summary": "Take one of Dima's speedboats to Coral Keys and dig up whatever Theo buried there.",
+    "steps": [
+      { "type": "dialogue", "lines": [
+        { "who": "Dima", "text": "(phone) You want a boat, Reyes? Fine. The Marlin at the marina. Bring it back with no holes.", "dur": 4.2 },
+        { "who": "Dima", "text": "(phone) And whatever Theo left on the Keys — I want to see it first.", "dur": 3.4 }
+      ] },
+      { "type": "spawnVehicle", "tag": "boat", "def": "marlin", "x": -775, "z": 640, "yaw": -1.5708, "paint": 16053492, "persistent": true },
+      { "type": "enterVehicle", "tag": "boat", "text": "Take the <b>Marlin</b> speedboat" },
+      { "type": "goto", "x": -1050, "z": -640, "radius": 16, "text": "Sail to the <b>Coral Keys</b> dock", "kind": "boat" },
+      { "type": "collect", "items": [[-1175, -655], [-1225, -610], [-1262, -700]], "text": "Find Theo's <b>stash</b> on the island", "tag": "stash" },
+      { "type": "dialogue", "lines": [{ "who": "Nico", "text": "Cash, a pistol… and a key. A safe-deposit key. First Solano Bank.", "dur": 4 }] },
+      { "type": "checkpoint", "x": -1110, "z": -632, "vehicle": "marlin" },
+      { "type": "enterAny", "text": "Get back in a <b>boat</b>", "kind": "boat" },
+      { "type": "spawnVehicle", "tag": "raiders", "def": "skiff", "x": -1020, "z": -560, "yaw": -2.4, "driver": "gang", "paint": 2763306 },
+      { "type": "spawnVehicle", "tag": "raiders", "def": "skiff", "x": -1000, "z": -700, "yaw": -1.0, "driver": "gang", "paint": 2763306 },
+      { "type": "pedAction", "tag": "raiders", "action": "hostile" },
+      { "type": "help", "text": "Raiders! You can shoot from a boat — aim with <b>◎</b>, fire with <b>✊</b> (pistol or SMG).", "time": 6 },
+      { "type": "goto", "x": -775, "z": 690, "radius": 18, "text": "Get back to <b>Gull Point Marina</b>", "kind": "boat" },
+      { "type": "dialogue", "lines": [
+        { "who": "Dima", "text": "(phone) A bank key? Theo always was a planner. Keep it close. People will want it.", "dur": 4 }
+      ] }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "boat", "text": "Dima's boat was destroyed" }]
+  },
+  {
+    "id": "m12_rooftops",
+    "act": 2,
+    "title": "Rooftops",
+    "giver": "juno",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m11_coralrun"],
+    "reward": 8000,
+    "hour": 15,
+    "summary": "Juno cracked Price's channel — and Price's people tracked her to the hospital roof. Get there first, by air.",
+    "steps": [
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "Juno's not answering. Last ping was the roof of Solano General.", "dur": 3.6 },
+        { "who": "Lena", "text": "Skyline Tower has a helicopter on the roof. Don't ask how I know.", "dur": 3.4 }
+      ] },
+      { "type": "goto", "x": -355, "z": -180, "radius": 3, "text": "Go to the <b>Skyline Tower</b> lobby", "onFoot": true },
+      { "type": "fadeOut", "time": 0.6 },
+      { "type": "teleport", "x": -347, "z": -197, "y": 72.6, "yaw": 3.14 },
+      { "type": "spawnVehicle", "tag": "heli", "def": "kestrel", "x": -355, "z": -205, "y": 72.7, "yaw": 0, "paint": 2767450, "persistent": true },
+      { "type": "fadeIn", "time": 0.6 },
+      { "type": "enterVehicle", "tag": "heli", "text": "Get in the <b>Kestrel</b>", "help": "Helicopter: <b>⇧/⇩</b> (gas/brake · <b>Shift/Ctrl</b>) to climb and descend. Left stick pitches forward and turns." },
+      { "type": "goto", "x": 110, "z": 65, "y": 38.6, "radius": 14, "text": "Land on the <b>hospital roof</b>", "kind": "heli" },
+      { "type": "spawnPed", "tag": "juno", "x": 104, "z": 58, "yaw": 0, "app": "story:juno", "state": "cower", "health": 300 },
+      { "type": "dialogue", "lines": [
+        { "who": "Juno", "text": "Took you long enough! They're coming up the stairs!", "dur": 3 },
+        { "who": "Juno", "text": "I got it, Nico — Price's own dispatch log. He set up Westbank. He set YOU up.", "dur": 4.2 }
+      ] },
+      { "type": "despawn", "tag": "juno" },
+      { "type": "wanted", "stars": 4 },
+      { "type": "help", "text": "Police helicopters see a long way. Fly low between towers or under cover to break line of sight.", "time": 7 },
+      { "type": "loseWanted", "text": "Lose the police <b>helicopter</b>" },
+      { "type": "goto", "x": -160, "z": -690, "radius": 18, "text": "Land at the empty lot behind <b>Lena's garage</b>", "kind": "heli" },
+      { "type": "dialogue", "lines": [{ "who": "Juno", "text": "Best. Taxi. Ever. I'm never doing that again.", "dur": 3 }] }
+    ],
+    "fail": [{ "type": "destroyed", "tag": "heli", "text": "The helicopter crashed" }]
+  },
+  {
+    "id": "m13_halcyon",
+    "act": 2,
+    "title": "Halcyon Nights",
+    "giver": "izzy",
+    "start": { "x": -545, "z": 245, "radius": 3.5 },
+    "requires": ["m12_rooftops"],
+    "reward": 6000,
+    "hour": 23,
+    "summary": "Izzy's party. Price will be there. Plant Juno's bug in the back office — then make sure everyone remembers you were busy.",
+    "steps": [
+      { "type": "spawnPed", "tag": "izzy", "x": -550, "z": 248, "yaw": 1.57, "app": "story:izzy", "state": "talk", "health": 400 },
+      { "type": "spawnPed", "tag": "mika", "x": -552, "z": 240, "yaw": 1.2, "app": "story:mika", "state": "dance" },
+      { "type": "dialogue", "lines": [
+        { "who": "Izzy", "text": "Price's lieutenants use my back office for their 'meetings'. Juno's bug goes under the desk.", "dur": 4.4 },
+        { "who": "Izzy", "text": "Bouncers don't know you. If they see you in the alley, the deal's off.", "dur": 3.6 }
+      ] },
+      { "type": "spawnPed", "tag": "bouncers", "x": -497, "z": 232, "yaw": 0, "app": "thug", "state": "guard", "weapon": "pistol" },
+      { "type": "spawnPed", "tag": "bouncers", "x": -497, "z": 266, "yaw": 3.14, "app": "thug", "state": "patrol", "weapon": "pistol" },
+      { "type": "spawnPed", "tag": "bouncers", "x": -510, "z": 218, "yaw": 1.57, "app": "thug", "state": "guard" },
+      { "type": "help", "text": "Stay out of the bouncers' line of sight. Crouch with <b>Ctrl</b>, use walls as cover (<b>▣</b>).", "time": 7 },
+      { "type": "stealth", "x": -500, "z": 249, "radius": 2.5, "text": "Sneak to the <b>back office door</b>", "guards": "bouncers", "detect": 11 },
+      { "type": "wait", "time": 2.5 },
+      { "type": "dialogue", "lines": [{ "who": "Juno", "text": "(radio) Bug's live. I can hear someone ordering a very expensive whisky.", "dur": 3.6 }] },
+      { "type": "goto", "x": -548, "z": 242, "radius": 3, "text": "Get back to the <b>dance floor</b>", "onFoot": true },
+      { "type": "dialogue", "lines": [
+        { "who": "Mika", "text": "You look like a man who needs an alibi. Lucky for you, I look like a woman who gives them.", "dur": 4.4 },
+        { "who": "Nico", "text": "Is that how you introduce yourself to everyone?", "dur": 2.6 },
+        { "who": "Mika", "text": "Only the ones worth remembering. Come on.", "dur": 2.8 }
+      ] },
+      { "type": "fadeOut", "time": 1.2 },
+      { "type": "time", "hour": 4 },
+      { "type": "despawn", "tag": "mika" },
+      { "type": "fadeIn", "time": 1.2 },
+      { "type": "dialogue", "lines": [{ "who": "Izzy", "text": "(phone) Twenty people swear you never left the VIP lounge. Sleep. You'll need it.", "dur": 3.8 }] }
+    ],
+    "fail": [{ "type": "dead", "tag": "izzy" }]
+  },
+  {
+    "id": "m14_ironprice",
+    "act": 2,
+    "title": "Iron Price",
+    "giver": "izzy",
+    "start": { "x": -545, "z": 245, "radius": 3.5 },
+    "requires": ["m13_halcyon"],
+    "reward": 9000,
+    "hour": 21,
+    "summary": "Izzy sets up a meeting at the cannery to trade the dispatch log. Something feels wrong.",
+    "steps": [
+      { "type": "dialogue", "lines": [
+        { "who": "Izzy", "text": "(phone) A buyer for the dispatch log. Federal type. Cannery Row, Volk's old pier. Come alone.", "dur": 4.6 }
+      ] },
+      { "type": "give", "weapon": "shotgun", "ammo": 48 },
+      { "type": "goto", "x": -640, "z": -900, "radius": 8, "text": "Meet the buyer on <b>Cannery Row</b>" },
+      { "type": "spawnPed", "tag": "price", "x": -630, "z": -908, "yaw": -1.2, "app": "story:price", "state": "idle", "health": 9999 },
+      { "type": "spawnGroup", "tag": "dirty", "count": 5, "x": -630, "z": -915, "r": 10, "app": "cop", "weapon": "smg", "state": "guard" },
+      { "type": "cutscene", "shots": [{ "orbit": "price", "dist": 4, "height": 1.8, "angle": 0.5, "dur": 9, "fov": 40 }], "lines": [
+        { "who": "Price", "text": "Nico Reyes. You should have stayed in your cell. It was safer.", "dur": 4 },
+        { "who": "Nico", "text": "Izzy sold me out.", "dur": 2 },
+        { "who": "Price", "text": "Izzy sells everybody. Tonight she sold you to me. Officers — resisting arrest.", "dur": 4 }
+      ] },
+      { "type": "despawn", "tag": "price" },
+      { "type": "pedAction", "tag": "dirty", "action": "hostile" },
+      { "type": "kill", "tag": "dirty", "text": "Survive the <b>ambush</b>" },
+      { "type": "wanted", "stars": 4 },
+      { "type": "loseWanted", "text": "Escape — lose the cops" },
+      { "type": "dialogue", "lines": [
+        { "who": "Juno", "text": "(radio) Nico! Price's channel — they're talking about Lena. They took her to the Volk yard!", "dur": 4.6 }
+      ] }
+    ]
+  },
+  {
+    "id": "m15_brotherskeeper",
+    "act": 2,
+    "title": "Brother's Keeper",
+    "giver": "juno",
+    "start": { "x": -100, "z": -676, "radius": 3 },
+    "requires": ["m14_ironprice"],
+    "reward": 10000,
+    "hour": 2,
+    "summary": "Lena is held at the Volk Shipping yard. Get her out alive.",
+    "steps": [
+      { "type": "dialogue", "lines": [
+        { "who": "Juno", "text": "Eight guards, maybe more. Volk's people, not cops. Price must be paying Dima too.", "dur": 4.2 },
+        { "who": "Nico", "text": "Then Dima can add them to his losses.", "dur": 2.4 }
+      ] },
+      { "type": "give", "weapon": "rifle", "ammo": 180 },
+      { "type": "armor", "amount": 100 },
+      { "type": "goto", "x": -593, "z": -770, "radius": 12, "text": "Get to the <b>Volk Shipping yard</b>" },
+      { "type": "checkpoint", "x": -593, "z": -775 },
+      { "type": "spawnGroup", "tag": "guards", "count": 8, "x": -600, "z": -705, "r": 22, "app": "thug", "weapon": "smg", "hostile": true, "health": 90 },
+      { "type": "kill", "tag": "guards", "text": "Clear out the <b>guards</b>" },
+      { "type": "spawnPed", "tag": "lena", "x": -606, "z": -690, "yaw": 1.57, "app": "story:lena", "state": "cower", "health": 300 },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "Took you long enough. They zip-tied me to a forklift, Nico. A forklift.", "dur": 3.8 },
+        { "who": "Nico", "text": "Let's get you somewhere with fewer forklifts.", "dur": 2.6 }
+      ] },
+      { "type": "spawnVehicle", "tag": "getaway", "def": "ranger", "x": -592.6, "z": -680, "yaw": 0, "paint": 1052688, "persistent": true },
+      { "type": "escort", "tag": "lena", "x": -170, "z": 600, "radius": 10, "text": "Get <b>Lena</b> to the Palm Heights bungalow" },
+      { "type": "dialogue", "lines": [
+        { "who": "Lena", "text": "This place has a garden. You have a house with a garden. Who are you?", "dur": 3.6 },
+        { "who": "Nico", "text": "Somebody who's done running. Stay here. I'm going to find Theo.", "dur": 3.4 }
+      ] },
+      { "type": "unlock", "what": "property", "id": "safehouse_heights" }
+    ],
+    "fail": [{ "type": "dead", "tag": "lena", "text": "Lena was killed" }]
+  }
+]

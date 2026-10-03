@@ -1,37 +1,69 @@
-import * as THREE from 'three';
+import './ui/styles.css';
 import RAPIER from '@dimforge/rapier3d-compat';
+import { Game } from './game/Game';
+import { params } from './core/params';
+import { TIPS } from './data/tips';
+import { SaveManager } from './game/SaveManager';
+import { decodeRig } from './characters/rig/RigData';
+import charsUrl from './assets/chars.bin?url';
 
 const bar = document.getElementById('boot-bar') as HTMLDivElement;
 const status = document.getElementById('boot-status') as HTMLDivElement;
+const tip = document.getElementById('boot-tip') as HTMLDivElement;
+tip.textContent = TIPS[Math.floor(Math.random() * TIPS.length)]!;
+const tipTimer = setInterval(() => (tip.textContent = TIPS[Math.floor(Math.random() * TIPS.length)]!), 4000);
+
+function progress(p: number, msg: string): Promise<void> {
+  bar.style.width = `${Math.round(p * 100)}%`;
+  status.textContent = msg.toUpperCase();
+  // yield so the browser paints the loading bar
+  return new Promise((r) => setTimeout(r, 0));
+}
 
 async function boot(): Promise<void> {
-  status.textContent = 'INITIALISING PHYSICS';
-  bar.style.width = '30%';
-  await RAPIER.init();
-  bar.style.width = '70%';
-  status.textContent = 'BUILDING SCENE';
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  document.getElementById('app')!.appendChild(renderer.domElement);
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87b5d8);
-  const cam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 500);
-  cam.position.set(4, 3, 6);
-  cam.lookAt(0, 0, 0);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.5));
-  const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xc8283c }));
-  scene.add(box);
-  renderer.setAnimationLoop((t) => {
-    box.rotation.y = t / 1000;
-    renderer.render(scene, cam);
+  await progress(0.1, 'Initialising physics');
+  const rigLoad = fetch(charsUrl).then((r) => {
+    if (!r.ok) throw new Error(`characters: HTTP ${r.status}`);
+    return r.arrayBuffer();
   });
-  bar.style.width = '100%';
+  await RAPIER.init();
+  await progress(0.2, 'Loading characters');
+  const rig = decodeRig(await rigLoad);
+  await progress(0.3, 'Starting engine');
+  const game = new Game(document.getElementById('app')!, rig);
+  (window as unknown as { __game: unknown }).__game = game;
+  if (params.test) {
+    await progress(0.8, 'Building test area');
+    game.setupTestArea();
+  } else {
+    await game.setupWorld(progress);
+  }
+  await progress(1, 'Ready');
+  game.start();
+  if (!params.test) {
+    const pending = SaveManager.takePending();
+    if (params.mission || params.skipTitle) game.saves.enabled = true;
+    else if (pending && pending !== '__new__') {
+      const d = await game.saves.store.load(pending);
+      if (d) game.saves.apply(d);
+      game.saves.enabled = true;
+    } else if (pending === '__new__') game.saves.enabled = true;
+    else void game.menus.showTitle();
+  }
+  clearInterval(tipTimer);
   const el = document.getElementById('boot')!;
   el.style.opacity = '0';
   setTimeout(() => el.remove(), 700);
-  (window as unknown as { __game: { ready: boolean } }).__game = { ready: true };
 }
+
+/** Offline support: precache the whole build (production only; dev uses HMR). */
+function registerServiceWorker(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((e: unknown) => console.warn('service worker failed', e));
+  });
+}
+registerServiceWorker();
 
 boot().catch((e: unknown) => {
   status.textContent = 'FAILED TO START: ' + String(e);

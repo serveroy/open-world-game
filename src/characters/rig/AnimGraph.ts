@@ -1,6 +1,6 @@
 import { computePose, makePose, type ActionAnim, type AnimState, type Pose } from '../Pose';
 import { rotate, type RigBody, type RigClip, type RigData } from './RigData';
-import { blendClip, blendPoseInto, LocalPose } from './PoseEval';
+import { blendClip, blendPoseInto, LocalPose, type ModelPose } from './PoseEval';
 import { euler, ProcRetarget } from './ProcPose';
 
 /**
@@ -99,6 +99,12 @@ const gaitSpeed = (c: RigClip): number => GAIT_SPEED[c.name] ?? c.speed;
  * above (the planted foot then roughly matches the ground again).
  */
 const STRIDE: Record<string, number> = { Jog_Fwd_Loop: 0.36, Sprint_Loop: 0.26 };
+/**
+ * Bounce kept (0..1) of the runs' pelvis rise above its lowest point. The mocap jog spends ~90% of
+ * its cycle airborne with a 24 cm bounce, which reads as skipping; flattening the rise keeps the
+ * feet on the ground for much longer while contact frames stay exactly where they were.
+ */
+export const BOUNCE: Record<string, number> = { Jog_Fwd_Loop: 0.4, Sprint_Loop: 0.6 };
 
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -113,6 +119,8 @@ export class AnimLibrary {
   /** Leg bones and each run cycle's average leg pose (see STRIDE). */
   readonly legBones: number[];
   readonly legMean = new Map<string, Float32Array>();
+  /** Lowest pelvis height (along model up) of each bounce-flattened run cycle. */
+  readonly pelvisMin = new Map<string, number>();
   /** Model-space +Z (forward) and +Y (up) expressed in the root bone's local frame (pelvis offsets). */
   readonly fwd = new Float32Array(3);
   readonly up = new Float32Array(3);
@@ -159,6 +167,14 @@ export class AnimLibrary {
       }
       this.legMean.set(name, mean);
     }
+    for (const name of Object.keys(BOUNCE)) {
+      const ci = rig.clipIndex.get(name);
+      if (ci === undefined) continue;
+      const c = rig.clips[ci]!;
+      let mn = Infinity;
+      for (let f = 0; f < c.frames; f++) mn = Math.min(mn, c.pelvis[f * 3]! * this.up[0]! + c.pelvis[f * 3 + 1]! * this.up[1]! + c.pelvis[f * 3 + 2]! * this.up[2]!);
+      this.pelvisMin.set(name, mn);
+    }
     rig.clips.forEach((cl, i) => (this.c[cl.name] = i));
   }
   clip(name: string): RigClip {
@@ -200,6 +216,29 @@ export class AnimController {
     rotate(q[0]!, q[1]!, q[2]!, q[3]!, body.pelvisOffset[0]!, body.pelvisOffset[1]!, body.pelvisOffset[2]!, _off, 0);
     this.seatShift = 0.31 - _off[2]!;
     this.swimLift = 1.16 - _off[1]!;
+    const r = this.lib.rig;
+    this.feet = ['ball_l', 'ball_r', 'foot_l', 'foot_r'].map((n) => r.bone(n));
+    this.feetRest = this.feet.map((b) => body.bindP[b * 3 + 1]!);
+  }
+
+  private feet: number[] = [];
+  private feetRest: number[] = [];
+  /** Set by evaluate(): plain on-foot locomotion, where the feet must not sink into the ground. */
+  private groundLock = false;
+
+  /**
+   * Ground lock (after FK): the dressed bodies' legs are longer than the clips' skeleton, so in deep
+   * stance frames a foot can dip below the floor. Lift the whole body by the deepest dip.
+   */
+  groundFix(model: ModelPose): void {
+    if (!this.groundLock || !this.feet.length) return;
+    let lift = 0;
+    for (let k = 0; k < this.feet.length; k++) {
+      const y = model.p[this.feet[k]! * 3 + 1]!;
+      lift = Math.max(lift, this.feetRest[k]! - 0.012 - y);
+    }
+    if (lift <= 0) return;
+    for (let i = 1; i < model.p.length; i += 3) model.p[i]! += lift;
   }
   /** Model-space FK pre-rotations per bone (null = none). Rebuilt each evaluate. */
   readonly pre: (Float32Array | null)[];
@@ -349,6 +388,7 @@ export class AnimController {
   /** Evaluate the blended local pose into `out` and fill `pre` FK overrides. */
   evaluate(s: AnimState, out: LocalPose): void {
     const lib = this.lib;
+    this.groundLock = s.grounded && !s.driving && !s.swimming && this.full.length === 0;
     const top = this.full[this.full.length - 1];
     const fullCover = top && top.w >= 0.999 && this.full.length === 1;
     let procDone = false;
@@ -435,6 +475,17 @@ export class AnimController {
       if (w <= 0.001) continue;
       acc += w;
       blendClip(rig, c, gaitTime(c, this.phase), w / acc, out);
+    }
+    // flatten the runs' bounce (weighted by how much of the pose is a run)
+    for (const [w, c] of gaits) {
+      const keep = BOUNCE[c.name];
+      const mn = lib.pelvisMin.get(c.name);
+      if (keep === undefined || mn === undefined || w <= 0.001) continue;
+      const a = (w / Math.max(acc, 1e-3)) * (1 - keep);
+      const u = lib.up, P = out.pelvis;
+      const h = P[0]! * u[0]! + P[1]! * u[1]! + P[2]! * u[2]!;
+      const d = Math.max(0, h - mn) * a;
+      P[0]! -= u[0]! * d; P[1]! -= u[1]! * d; P[2]! -= u[2]! * d;
     }
     // shorten the run strides (weighted by how much of the pose is a run)
     for (const [w, c] of gaits) {

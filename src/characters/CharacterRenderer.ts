@@ -204,6 +204,7 @@ export class CharacterRenderer {
       if (anim) s.ctrl.evaluate(anim, s.local);
       else this.lib.proc.apply(pose, s.local);
       forwardKinematics(this.rig, this.rig.bodies[s.body]!, s.local, s.model, anim ? s.ctrl.pre : null);
+      if (anim) s.ctrl.groundFix(s.model);
       s.evalFrame = this.frameNo;
       s.posed = true;
       this.stats.posed++;

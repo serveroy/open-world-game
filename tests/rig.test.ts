@@ -180,7 +180,9 @@ describe('animation graph', () => {
     for (const speed of [1.3, 1.75, 4.6, 7.2]) {
       const st = makeAnimState();
       st.speed = speed;
-      const c = run(st, 1);
+      const c = new AnimController(lib);
+      c.fitBody(male);
+      run(st, 1, c);
       const lp = new LocalPose(nb), m = new ModelPose(nb);
       const dt = 1 / 120;
       const vel: number[] = [];
@@ -189,6 +191,7 @@ describe('animation graph', () => {
         c.update(st, dt);
         c.evaluate(st, lp);
         forwardKinematics(rig, male, lp, m, c.pre);
+        c.groundFix(m);
         const l = at(m, 'ball_l'), r = at(m, 'ball_r');
         if (prev) {
           // only planted samples (toe within 2 cm of the ground)

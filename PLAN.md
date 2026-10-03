@@ -440,6 +440,7 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
   - `AnimGraph` maps `AnimState` to clip layers: speed-matched gait blending, full-body and upper-body cross-fades, and FK overrides for strafing twist and lean.
   - The mocap jog and sprint have leaping strides (their feet imply about 6 and 9 m/s). Their leg swing is pulled about 30% toward each cycle's average leg pose (`STRIDE`) and the cycles are pinned to 3.9 and 6.9 m/s (`GAIT_SPEED`), so runs keep a natural cadence with planted feet.
   - The lower-body strafe twist only applies while aiming.
+  - The mocap jog was airborne about 92% of its cycle with a 24 cm bounce, which looked like skipping. The rise above its lowest point is cut to 40% (sprint 60%, `BOUNCE`). A ground lock (`AnimController.groundFix`) lifts the body when a foot would dip below the floor, since the dressed legs are longer than the clips' skeleton. Result: each foot is down about 45% of the jog cycle and the body is airborne about 10% of it.
   - Actions with no clip (hands up, cower, kick, lockpick, wave, bike) retarget the old procedural `Pose` onto the skeleton (`ProcPose`).
   - The ragdoll is now 11 bodies on real bones, with hinge-limited elbows and knees.
   - `__game.lineup()` shows a QA row of animated characters.

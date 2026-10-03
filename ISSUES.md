@@ -9,7 +9,7 @@ This file tracks open issues, tagged by severity:
 ✅ = fixed (kept for history).
 
 ## Fixed in the characters round
-- [x] ✅ 🟠 **Blocky box people.** Characters are now skinned human bodies (male and female) with motion-captured animation from the CC0 Quaternius Universal Animation Library: walk, jog, sprint, crouch, swim, jump and land, two-handed aiming that follows the aim pitch, punches, bat swings, throws, reloads, phone calls, talking, dancing, sitting, driving, hit reactions, knock-downs and getting up. A sculpted head with eyes, nose, ears and lips replaces the mannequin's blank head. Hair, beards, hats, jackets, vests and held weapons are fitted to the skeleton. The shops and barber still recolour and restyle everyone. All characters are drawn in a couple of GPU-instanced draw calls. Ragdolls use the real skeleton (11 bodies, knees and elbows only bend the right way).
+- [x] ✅ 🟠 **Blocky box people.** Characters are now dressed, low-poly people from the CC0 Quaternius Ultimate Modular Men and Women packs: 16 outfits whose heads, tops, trousers and shoes mix and match, tinted per person. They move with motion-captured animation from the CC0 Quaternius Universal Animation Library: walk, jog, sprint, crouch, swim, jump and land, two-handed aiming that follows the aim pitch, punches, bat swings, throws, reloads, phone calls, talking, dancing, sitting, driving, hit reactions, knock-downs and getting up. The barber, clothes shop and tattoo parlour still restyle everyone (painted stubble and goatees, modelled full beards). Police wear navy uniforms with caps; SWAT wear armour. Characters are drawn in instanced batches: one draw per outfit combination, so a squad of cops is one draw. Ragdolls use the real skeleton (11 bodies; knees and elbows only bend the right way).
 
 ## Fixed in the phone-feedback round
 - [x] ✅ 🔴 **Blurry rendering on phones.** The Low preset capped the render at 1 pixel per CSS pixel, and dynamic resolution dropped to half of that. In landscape inside an app (about 572×307 CSS px at 3×), the world was drawn at roughly a third of the screen's resolution. Rendering now targets a render height per preset (Low 600, Medium 780, High 1080 device px), with a pixel budget and a floor for dynamic resolution (`renderPixelRatio`, unit-tested). iPhones now auto-select Medium, which has MSAA.
@@ -39,7 +39,8 @@ This file tracks open issues, tagged by severity:
 - [ ] 🟠 **Quality preset and shadows still need a restart.**
 - [ ] 🟠 **Story missions were auto-played in headless tests**; a full play-through in a real browser is still needed.
 - [ ] 🟠 **Car and building models are procedural and blocky.** See "Art upgrade" below.
-- [ ] 🟡 **Character rendering cost on real phones.** GPU skinning of about 7–9k vertices per visible character. CPU animation measured at about 11 µs per character in a headless desktop browser; check FPS with a crowd on Low and Medium.
+- [ ] 🟡 **Character rendering cost on real phones.** GPU skinning of about 3.5k vertices (6.5k triangles) per visible character, one draw per outfit combination (plus its shadow when near). CPU animation measured at about 5 µs per character in a headless desktop browser. Check FPS with a crowd on Low and Medium.
+- [ ] ⚪ The character asset is 2.6 MB (1.4 MB gzipped). Meshopt compression could roughly halve it.
 - [ ] 🟡 **FPS on real phones.** Turn on Settings → Graphics → "Show FPS counter" and report numbers on Low, Medium and High.
 - [ ] 🟡 **Audio by ear on iPhone and Android.** Check engine, siren and radio levels, and how good the device voices sound.
 - [ ] 🟡 **Service worker update flow** on a real Vercel or Pages deploy.
@@ -48,7 +49,7 @@ This file tracks open issues, tagged by severity:
 - [ ] ⚪ Race rival pace and rubber-banding need tuning by feel (`Race.ts`, `pace`).
 
 ## Art upgrade (deferred, planned)
-1. ✅ **People.** Done with CC0 motion-capture animation on skinned bodies (see above). Next step: dressed bodies from Quaternius "Ultimate Modular Men/Women" (CC0), rebound to the same skeleton.
+1. ✅ **People.** Done: dressed CC0 modular characters with CC0 motion-capture animation (see above).
 2. **Cars.** Bevelled bodies, wheel arches, separate glass and lights, and a proper paint shader.
 3. **Buildings.** Storefront ground floors, window frames, roof clutter (AC units, water tanks) and a few hero landmarks.
 

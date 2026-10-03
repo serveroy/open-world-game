@@ -1,41 +1,28 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { RigBody, RigData } from './RigData';
-import { Cat, HAIR_IDS, HAT_IDS, ITEM_IDS, OUTER_IDS, BEARD_IDS, Region, variant } from './regions';
+import { PartKind, type RigBody, type RigData, type RigPart } from './RigData';
+import { Cat, HAT_IDS, ITEM_IDS, Paint, variant } from './regions';
 
 /**
- * Builds the renderable geometry for one body: the scanned body mesh plus every accessory variant
- * (hairstyles, beards, hats, jackets/vests, held items) skinned to the same skeleton. Instances pick
- * variants in the vertex shader, so all characters of a body type draw in one call.
- *
- * Hair/hats/beards are generated on a "head shell" fitted to the body's own head vertices, so they sit
- * snugly on the scalp with clean, smooth hairlines. Jackets are offset shells of the torso/arms.
+ * Renderable geometry for one dressed part (Quaternius Ultimate Modular Men / Women, rebound to the
+ * animation skeleton by scripts/build-characters.mjs), plus the procedural extras that belong to it:
+ * hats fitted to each head (on a "head shell" wrapped around that head's own vertices) and the held
+ * items in each body's right hand. Instances pick extras in the vertex shader.
  */
-
-export interface BodyGeometry {
-  geometry: THREE.BufferGeometry;
-  /** Bind-space landmarks used by the paint shader. */
-  head: THREE.Vector4; // center xyz, radius-ish
-  face: THREE.Vector4; // eyeY, browY, mouthY, eyeX
-  eye: THREE.Vector4; // eyeball centre (|x|, y, z) + radius
-  limbs: THREE.Vector4; // shoulderX, wristX, hipY, ankleY
-  torso: THREE.Vector4; // waistY, chestFrontZ, neckBaseY, beltY
-}
 
 class Builder {
   pos: number[] = [];
   nrm: number[] = [];
   si: number[] = [];
   sw: number[] = [];
-  reg: number[] = [];
+  col: number[] = [];
   vari: number[] = [];
-  shade: number[] = [];
   idx: number[] = [];
   get count(): number {
     return this.pos.length / 3;
   }
-  /** Append a (non-indexed or indexed) three geometry, rigidly bound to `bone`. */
-  addRigid(g: THREE.BufferGeometry, bone: number, region: Region, vari: number, shade: (i: number) => number = () => 1): void {
+  /** Append a three geometry rigidly bound to `bone`; `shade` (0..1) goes in the colour channel. */
+  addRigid(g: THREE.BufferGeometry, bone: number, paint: Paint, vari: number, shade: (i: number) => number = () => 1): void {
     if (!g.attributes.normal) g.computeVertexNormals();
     const base = this.count;
     const P = g.attributes.position!, N = g.attributes.normal!;
@@ -44,9 +31,9 @@ class Builder {
       this.nrm.push(N.getX(i), N.getY(i), N.getZ(i));
       this.si.push(bone, 0, 0, 0);
       this.sw.push(255, 0, 0, 0);
-      this.reg.push(region);
+      const v = Math.round(Math.max(0, Math.min(1, shade(i))) * 255);
+      this.col.push(v, v, v, paint);
       this.vari.push(vari);
-      this.shade.push(Math.round(Math.max(0, Math.min(1, shade(i))) * 255));
     }
     if (g.index) for (let i = 0; i < g.index.count; i++) this.idx.push(base + g.index.getX(i));
     else for (let i = 0; i < P.count; i++) this.idx.push(base + i);
@@ -161,309 +148,86 @@ const line = (front: number, side: number, back: number) => (phi: number): numbe
   return c >= 0 ? side + (front - side) * c * c * (3 - 2 * c) : side + (back - side) * -c * -c * (3 + 2 * c);
 };
 
-export function buildBodyGeometry(rig: RigData, body: RigBody): BodyGeometry {
+export interface PartGeometry {
+  part: RigPart;
+  geometry: THREE.BufferGeometry;
+}
+
+/** Built-in headwear (the procedural hats are skipped on these heads). */
+const HAS_HAT = /^(Swat|Worker|Farmer)_Head$/;
+
+export function buildPartGeometry(rig: RigData, part: RigPart): PartGeometry {
   const B = new Builder();
-  const nb = rig.boneNames.length;
-  void nb;
-  // ---- body ----
-  const P = body.position;
-  for (let i = 0; i < body.vertexCount; i++) {
-    B.pos.push(P[i * 3]!, P[i * 3 + 1]!, P[i * 3 + 2]!);
-    B.nrm.push(body.normal[i * 4]! / 127, body.normal[i * 4 + 1]! / 127, body.normal[i * 4 + 2]! / 127);
+  const body = rig.bodies[part.body]!;
+  const q = 1 / part.quant;
+  for (let i = 0; i < part.vertexCount; i++) {
+    B.pos.push(part.position[i * 4]! * q, part.position[i * 4 + 1]! * q, part.position[i * 4 + 2]! * q);
+    B.nrm.push(part.normal[i * 4]! / 127, part.normal[i * 4 + 1]! / 127, part.normal[i * 4 + 2]! / 127);
     for (let k = 0; k < 4; k++) {
-      B.si.push(body.skinIndex[i * 4 + k]!);
-      B.sw.push(body.skinWeight[i * 4 + k]!);
+      B.si.push(part.skinIndex[i * 4 + k]!);
+      B.sw.push(part.skinWeight[i * 4 + k]!);
+      B.col.push(part.color[i * 4 + k]!);
     }
-    B.reg.push(body.region[i]!);
     B.vari.push(0);
-    B.shade.push(255);
   }
-  for (const i of body.index) B.idx.push(i);
+  for (const i of part.index) B.idx.push(i);
+  if (part.kind === PartKind.Head && !HAS_HAT.test(part.name)) addHats(B, rig, body, part);
+  if (part.kind === PartKind.Body) addItems(B, rig, body);
 
-  const bone = (n: string): number => rig.bone(n);
-  const bp = (n: string): THREE.Vector3 => {
-    const i = bone(n);
-    return new THREE.Vector3(body.bindP[i * 3]!, body.bindP[i * 3 + 1]!, body.bindP[i * 3 + 2]!);
-  };
-  const HEAD = bone('Head');
-
-  // ---- head: the scanned mannequin head is a featureless egg, so it is replaced by a sculpted head
-  // (jaw, cheekbones, brow, nose, lips, ears, real eyeballs) sized to the original ----
-  const box = new THREE.Box3();
-  for (let i = 0; i < body.vertexCount; i++) if (body.region[i] === Region.Head) box.expandByPoint(new THREE.Vector3(P[i * 3]!, P[i * 3 + 1]!, P[i * 3 + 2]!));
-  const female = body.name === 'female';
-  const c = box.getCenter(new THREE.Vector3());
-  c.y -= 0.004;
-  c.z -= 0.006;
-  // drop the original head triangles
-  B.idx = B.idx.filter((_, k, arr) => {
-    const t = k - (k % 3);
-    return !(B.reg[arr[t]!] === Region.Head || B.reg[arr[t + 1]!] === Region.Head || B.reg[arr[t + 2]!] === Region.Head);
-  });
-  const head = sculptHead(female);
-  head.geo.translate(c.x, c.y, c.z);
-  B.addRigid(head.geo, HEAD, Region.Head, 0);
-  for (const ear of head.ears) {
-    ear.translate(c.x, c.y, c.z);
-    B.addRigid(ear, HEAD, Region.Head, 0, () => 0.96);
-  }
-  for (const eye of head.eyes) {
-    eye.translate(c.x, c.y, c.z);
-    B.addRigid(eye, HEAD, Region.Eye, 0);
-  }
-  // neck bridge into the skull (neck bone at the bottom → head bone at the top)
-  {
-    const NK = bone('neck_01');
-    const top = c.y - 0.02, bot = bp('neck_01').y - 0.02;
-    const cyl = new THREE.CylinderGeometry(female ? 0.042 : 0.05, female ? 0.047 : 0.056, top - bot, 16, 4, true);
-    cyl.translate(c.x, (top + bot) / 2, c.z - 0.018);
-    const base = B.count;
-    B.addRigid(cyl, HEAD, Region.Neck, 0);
-    const n = cyl.attributes.position!.count;
-    for (let i = 0; i < n; i++) {
-      const y = B.pos[(base + i) * 3 + 1]!;
-      const wHead = smooth(bot + 0.02, top, y);
-      const a = Math.round(wHead * 255);
-      const o = (base + i) * 4;
-      B.si[o] = HEAD; B.si[o + 1] = NK;
-      B.sw[o] = a; B.sw[o + 1] = 255 - a;
-    }
-  }
-  const headPts: THREE.Vector3[] = [];
-  const hp = head.points;
-  for (let i = 0; i < hp.length; i += 3) headPts.push(new THREE.Vector3(hp[i]! + c.x, hp[i + 1]! + c.y, hp[i + 2]! + c.z));
-  const half = new THREE.Vector3(head.rx, head.ry, head.rz);
-  const shell = new HeadShell(c, headPts, half);
-  const R = Math.max(half.x, half.z);
-  const eyeAt = head.eyeCenter.clone().add(c);
-
-  // ---- hair ----
-  const hairline = line(0.98, 1.55, 2.1);
-  // close crop: thin on the sides and back, a little volume on top and at the front
-  const shortThick = (u: number, phi: number): number => 0.0025 + 0.003 * (1 - smooth(0.55, 1, u)) + (0.007 + 0.003 * Math.max(0, Math.cos(phi))) * (1 - smooth(0.0, 0.6, u));
-  B.addRigid(shell.cap(hairline, shortThick), HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.short));
-  B.addRigid(shell.cap(line(1.02, 1.45, 2.05), (u) => 0.003 + 0.006 * (1 - smooth(0.8, 1, u))), HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.slick), () => 0.9);
-  // long: fuller cap covering the ears + a curtain down the back to the shoulder blades
-  {
-    const cap = shell.cap(line(0.95, 1.75, 2.3), (u) => 0.006 + 0.016 * (1 - smooth(0.8, 1, u)));
-    const curtain = buildCurtain(shell, c, bp('neck_01').y - 0.16);
-    B.addRigid(cap, HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.long));
-    const base = B.count;
-    B.addRigid(curtain.g, HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.long), (i) => 0.92 + 0.08 * curtain.u[i]!);
-    // lower curtain follows the upper back so head turns bend the hair
-    const S3 = bone('spine_03'), NK = bone('neck_01');
-    for (let i = 0; i < curtain.u.length; i++) {
-      const u = curtain.u[i]!; // 0 top → 1 bottom
-      const wHead = 1 - smooth(0.25, 0.75, u), wNeck = (1 - wHead) * (1 - smooth(0.6, 1, u)), wSpine = 1 - wHead - wNeck;
-      const q = [wHead, wNeck, wSpine].map((w) => Math.round(w * 255));
-      q[0]! += 255 - q[0]! - q[1]! - q[2]!;
-      const o = (base + i) * 4;
-      B.si[o] = HEAD; B.si[o + 1] = NK; B.si[o + 2] = S3; B.si[o + 3] = 0;
-      B.sw[o] = q[0]!; B.sw[o + 1] = q[1]!; B.sw[o + 2] = q[2]!; B.sw[o + 3] = 0;
-    }
-  }
-  // bun: neat cap + knot at the back of the crown
-  {
-    B.addRigid(shell.cap(line(1.0, 1.55, 2.15), (u) => 0.003 + 0.007 * (1 - smooth(0.8, 1, u))), HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.bun));
-    const knot = new THREE.SphereGeometry(R * 0.5, 14, 10);
-    const at = shell.point(0.95, Math.PI, R * 0.32, new THREE.Vector3());
-    knot.scale(1, 0.9, 0.85).translate(at.x, at.y, at.z);
-    B.addRigid(knot, HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.bun), () => 0.9);
-  }
-  // afro: big rounded volume
-  B.addRigid(shell.cap(line(1.0, 1.62, 2.1), (u, phi) => (0.045 + 0.01 * Math.cos(phi)) * (1 - smooth(0.7, 1, u)) + 0.008, 16), HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.afro));
-  // mohawk: shaved sides (painted) + a tall ridge along the midline
-  B.addRigid(buildRidge(shell), HEAD, Region.Hair, variant(Cat.Hair, HAIR_IDS.mohawk));
-
-  // ---- beards (front lower face; θ measured from the crown, π/2 ≈ eye level) ----
-  {
-    const bulge = (u: number): number => 0.003 + 0.011 * Math.sin(Math.PI * u);
-    const full = variant(Cat.Beard, BEARD_IDS.full), goatee = variant(Cat.Beard, BEARD_IDS.goatee);
-    // cheeks + jaw + chin
-    B.addRigid(shell.band((phi) => 1.62 + 0.36 * Math.cos(phi) ** 2, (phi) => 2.42 + 0.38 * Math.cos(phi), (u) => bulge(u) + 0.004 * u, 10, -1.45, 1.45, 28), HEAD, Region.Beard, full);
-    // moustache
-    B.addRigid(shell.band(() => 1.9, () => 2.0, (u) => 0.0015 + 0.0035 * Math.sin(Math.PI * u), 4, -0.5, 0.5, 10), HEAD, Region.Beard, full);
-    B.addRigid(shell.band(() => 1.9, () => 2.0, (u) => 0.0015 + 0.0035 * Math.sin(Math.PI * u), 4, -0.45, 0.45, 10), HEAD, Region.Beard, goatee);
-    B.addRigid(shell.band(() => 2.14, () => 2.78, (u) => 0.003 + 0.012 * Math.sin(Math.PI * u), 8, -0.42, 0.42, 10), HEAD, Region.Beard, goatee);
-  }
-
-  // ---- hats ----
-  {
-    // baseball cap: dome + bill
-    const domeLine = line(1.12, 1.45, 1.75);
-    B.addRigid(shell.cap(domeLine, () => 0.02, 12), HEAD, Region.Hat, variant(Cat.Hat, HAT_IDS.cap));
-    B.addRigid(buildBill(shell, 1.12, R * 0.95, 0.012), HEAD, Region.HatTrim, variant(Cat.Hat, HAT_IDS.cap), () => 0.85);
-    // police cap: taller flat-topped crown + black visor + band
-    B.addRigid(shell.cap(line(1.15, 1.42, 1.62), (u) => 0.022 + 0.03 * smooth(0.0, 0.55, 1 - u), 12), HEAD, Region.Hat, variant(Cat.Hat, HAT_IDS.police));
-    B.addRigid(buildBill(shell, 1.15, R * 0.75, 0.01), HEAD, Region.HatTrim, variant(Cat.Hat, HAT_IDS.police), () => 0.18);
-    // helmet: thick shell down over the ears, dark visor strip
-    B.addRigid(shell.cap(line(1.12, 1.78, 1.95), () => 0.035, 14), HEAD, Region.Hat, variant(Cat.Hat, HAT_IDS.helmet));
-    B.addRigid(shell.cap(() => 1.32, () => 0.045, 3, -0.9, 0.9, 12), HEAD, Region.HatTrim, variant(Cat.Hat, HAT_IDS.helmet), () => 0.25);
-    // beanie: soft dome with a folded band
-    B.addRigid(shell.cap(line(1.12, 1.55, 1.85), (u) => 0.02 + 0.03 * (1 - u) ** 2, 14), HEAD, Region.Hat, variant(Cat.Hat, HAT_IDS.beanie), () => 1);
-    const bl = line(1.12, 1.55, 1.85);
-    B.addRigid(shell.band((phi) => bl(phi) - 0.24, bl, () => 0.03, 3), HEAD, Region.HatTrim, variant(Cat.Hat, HAT_IDS.beanie), () => 0.82);
-  }
-
-  // ---- held items (right hand) ----
-  addItems(B, rig, body);
-
-  // ---- outerwear shells ----
-  addOuter(B, body);
-
-  // ---- geometry ----
-  const n = B.count;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(B.nrm, 3));
   g.setAttribute('aBones', new THREE.Uint8BufferAttribute(B.si, 4));
   g.setAttribute('aWeights', new THREE.Uint8BufferAttribute(B.sw, 4, true));
-  g.setAttribute('aRegion', new THREE.Uint8BufferAttribute(B.reg, 1));
+  g.setAttribute('aColor', new THREE.Uint8BufferAttribute(B.col, 4));
   g.setAttribute('aVar', new THREE.Uint8BufferAttribute(B.vari, 1));
-  g.setAttribute('aShade', new THREE.Uint8BufferAttribute(B.shade, 1, true));
-  g.setIndex(n > 65535 ? new THREE.Uint32BufferAttribute(B.idx, 1) : new THREE.Uint16BufferAttribute(B.idx, 1));
-
-  const sh = bp('upperarm_l'), wr = bp('hand_l'), hip = bp('thigh_l'), ank = bp('foot_l');
-  const chestFront = maxZ(body, Region.Chest);
-  return {
-    geometry: g,
-    head: new THREE.Vector4(c.x, c.y, c.z, R),
-    face: new THREE.Vector4(eyeAt.y, c.y + head.browY, c.y + head.mouthY, eyeAt.x),
-    eye: new THREE.Vector4(eyeAt.x, eyeAt.y, eyeAt.z, head.eyeR),
-    limbs: new THREE.Vector4(sh.x, wr.x, hip.y + 0.03, ank.y + 0.035),
-    torso: new THREE.Vector4(bp('pelvis').y + 0.1, chestFront, bp('neck_01').y - 0.02, bp('pelvis').y + 0.085),
-  };
+  g.setIndex(B.count > 65535 ? new THREE.Uint32BufferAttribute(B.idx, 1) : new THREE.Uint16BufferAttribute(B.idx, 1));
+  return { part, geometry: g };
 }
 
-/** Stylised sculpted head in head-local space (+Z front, origin at the skull centre). */
-function sculptHead(female: boolean): { geo: THREE.BufferGeometry; ears: THREE.BufferGeometry[]; eyes: THREE.BufferGeometry[]; points: Float32Array; rx: number; ry: number; rz: number; eyeCenter: THREE.Vector3; eyeR: number; browY: number; mouthY: number } {
-  const rx = female ? 0.08 : 0.086, ry = female ? 0.112 : 0.12, rz = female ? 0.099 : 0.105;
-  const g = new THREE.SphereGeometry(1, 44, 34);
-  const P = g.attributes.position!;
-  const gauss = (x: number, y: number, x0: number, y0: number, sx: number, sy: number): number => Math.exp(-(((x - x0) / sx) ** 2) - ((y - y0) / sy) ** 2);
-  const eyeX = female ? 0.032 : 0.034, eyeY = 0.01;
-  for (let i = 0; i < P.count; i++) {
-    const dx = P.getX(i), dy = P.getY(i), dz = P.getZ(i);
-    let x = dx * rx, y = dy * ry, z = dz * (dz < 0 ? rz * 1.07 : rz);
-    // jaw narrows toward the chin, more at the front; flat underside
-    const low = smooth(0.05, -0.9, dy);
-    const front = Math.max(0, dz);
-    x *= 1 - (female ? 0.4 : 0.32) * low * (0.55 + 0.45 * front);
-    if (dy < -0.55) y += (-ry * 0.84 - y) * smooth(-0.55, -1, dy) * 0.55 * (0.4 + 0.6 * front);
-    // back of the jaw tucks in under the skull
-    if (dz < 0 && dy < -0.2) z *= 1 - 0.3 * smooth(-0.2, -0.9, dy);
-    const f2 = front * front, f4 = f2 * f2;
-    // facial relief
-    z += (female ? 0.012 : 0.015) * gauss(x, y, 0, -0.02, 0.0105, 0.021) * f4; // nose bridge + body
-    z += 0.005 * gauss(x, y, 0, -0.036, 0.013, 0.009) * f4; // nose tip / nostrils
-    z += 0.0065 * (gauss(x, y, eyeX, 0.034, 0.024, 0.009) + gauss(x, y, -eyeX, 0.034, 0.024, 0.009)) * f2; // brow ridge
-    z -= 0.0085 * (gauss(x, y, eyeX, eyeY, 0.015, 0.011) + gauss(x, y, -eyeX, eyeY, 0.015, 0.011)) * f2; // eye sockets
-    x += Math.sign(x) * 0.0045 * gauss(Math.abs(x), y, 0.052, -0.012, 0.02, 0.02) * front; // cheekbones
-    z += (female ? 0.004 : 0.007) * gauss(x, y, 0, -0.104, 0.022, 0.016) * f2; // chin
-    z += (female ? 0.0042 : 0.0032) * (gauss(x, y, 0, -0.058, 0.017, 0.0045) + gauss(x, y, 0, -0.07, 0.015, 0.005)) * f4; // lips
-    z -= 0.002 * gauss(x, y, 0, -0.064, 0.02, 0.002) * f4; // mouth line
-    P.setXYZ(i, x, y, z);
-  }
-  g.computeVertexNormals();
-  // eyeballs: find the socket surface depth
-  let zs = 0;
-  for (let i = 0; i < P.count; i++) if (Math.abs(P.getX(i) - eyeX) < 0.006 && Math.abs(P.getY(i) - eyeY) < 0.006 && P.getZ(i) > zs) zs = P.getZ(i);
-  const eyeR = female ? 0.0112 : 0.0115;
-  const eyeCenter = new THREE.Vector3(eyeX, eyeY, zs - eyeR * 0.62);
-  const eyes = [1, -1].map((sx) => {
-    const e = new THREE.SphereGeometry(eyeR, 14, 10);
-    e.translate(sx * eyeX, eyeY, eyeCenter.z);
-    return e;
-  });
-  const ears = [1, -1].map((sx) => {
-    const e = new THREE.SphereGeometry(1, 12, 9);
-    e.scale(0.012, female ? 0.026 : 0.029, 0.019);
-    e.rotateY(sx * 0.35);
-    e.translate(sx * rx * 0.93, -0.008, -0.01);
-    e.computeVertexNormals();
-    return e;
-  });
-  return { geo: g, ears, eyes, points: new Float32Array(P.array as Float32Array), rx, ry, rz, eyeCenter, eyeR, browY: 0.034, mouthY: -0.064 };
+/** Bind-space head bone position of a body (beard painting). */
+export function headOf(rig: RigData, body: RigBody): THREE.Vector4 {
+  const i = rig.bone('Head') * 3;
+  return new THREE.Vector4(body.bindP[i]!, body.bindP[i + 1]!, body.bindP[i + 2]!, 0);
 }
 
-function maxZ(body: RigBody, region: Region): number {
-  let z = -1;
-  for (let i = 0; i < body.vertexCount; i++) if (body.region[i] === region) z = Math.max(z, body.position[i * 3 + 2]!);
-  return z;
+/** Bind-space landmarks of a body (tattoo placement): shoulder x, wrist x, top of the neck y. */
+export function limbsOf(rig: RigData, body: RigBody): THREE.Vector4 {
+  const x = (n: string): number => body.bindP[rig.bone(n) * 3]!;
+  return new THREE.Vector4(x('upperarm_l'), x('hand_l'), body.bindP[rig.bone('neck_01') * 3 + 1]! + 0.06, 0);
 }
 
-/** Long-hair curtain: back half-tube from the nape region to below the neck. */
-function buildCurtain(shell: HeadShell, c: THREE.Vector3, bottomY: number): { g: THREE.BufferGeometry; u: number[] } {
-  const rows = 10, cols = 22;
-  const pos: number[] = [];
-  const us: number[] = [];
-  const idx: number[] = [];
-  const v = new THREE.Vector3();
-  const phi0 = Math.PI * 0.42, phi1 = Math.PI * 1.58;
-  for (let i = 0; i <= rows; i++) {
-    const u = i / rows;
-    for (let j = 0; j <= cols; j++) {
-      const phi = phi0 + ((phi1 - phi0) * j) / cols;
-      // start on the shell around ear level, then fall straight down and flare slightly
-      shell.point(1.55, phi, 0.016, v);
-      const y = c.y + (v.y - c.y) * (1 - u) + (bottomY - c.y) * u;
-      const flare = 1 + 0.18 * u;
-      const sx = c.x + (v.x - c.x) * flare, sz = c.z + (v.z - c.z) * flare - 0.02 * u;
-      pos.push(sx, y, sz);
-      us.push(u);
-    }
+function addHats(B: Builder, rig: RigData, body: RigBody, part: RigPart): void {
+  const HEAD = rig.bone('Head');
+  const neckY = body.bindP[rig.bone('neck_01') * 3 + 1]!;
+  const pts: THREE.Vector3[] = [];
+  const box = new THREE.Box3();
+  const q = 1 / part.quant;
+  for (let i = 0; i < part.vertexCount; i++) {
+    const v = new THREE.Vector3(part.position[i * 4]! * q, part.position[i * 4 + 1]! * q, part.position[i * 4 + 2]! * q);
+    if (v.y < neckY + 0.06) continue;
+    pts.push(v);
+    box.expandByPoint(v);
   }
-  for (let i = 0; i < rows; i++) {
-    for (let j = 0; j < cols; j++) {
-      const a = i * (cols + 1) + j, b = a + 1, cc = a + cols + 1, d = cc + 1;
-      idx.push(a, b, cc, b, d, cc);
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  // double-sided by duplicating with flipped winding (inside visible when the head turns)
-  const back = g.clone();
-  const bi = back.index!;
-  for (let t = 0; t < bi.count; t += 3) {
-    const a = bi.getX(t + 1);
-    bi.setX(t + 1, bi.getX(t + 2));
-    bi.setX(t + 2, a);
-  }
-  const bn = back.attributes.normal!;
-  for (let i = 0; i < bn.count; i++) bn.setXYZ(i, -bn.getX(i), -bn.getY(i), -bn.getZ(i));
-  const m = mergeGeometries([g, back], false)!;
-  return { g: m, u: [...us, ...us] };
-}
-
-/** Mohawk ridge along the sagittal midline. */
-function buildRidge(shell: HeadShell): THREE.BufferGeometry {
-  const pos: number[] = [];
-  const idx: number[] = [];
-  const steps = 18;
-  const v = new THREE.Vector3(), n = new THREE.Vector3();
-  for (let i = 0; i <= steps; i++) {
-    // from forehead (front, θ≈1.0) over the crown to the nape (back, θ≈2.0)
-    const t = i / steps;
-    const ang = -1.0 + t * 3.0; // signed polar angle: <0 front, >0 back
-    const theta = Math.abs(ang), phi = ang < 0 ? 0 : Math.PI;
-    shell.point(theta, phi, 0.004, v);
-    shell.dir(theta, phi, n);
-    const h = 0.065 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + 0.01;
-    const w = 0.016;
-    pos.push(v.x - w, v.y, v.z, v.x + n.x * h, v.y + n.y * h, v.z + n.z * h, v.x + w, v.y, v.z);
-  }
-  for (let i = 0; i < steps; i++) {
-    const a = i * 3, b = (i + 1) * 3;
-    idx.push(a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  const ng = g.toNonIndexed();
-  ng.computeVertexNormals();
-  return ng;
+  if (!pts.length) return;
+  const c = box.getCenter(new THREE.Vector3());
+  const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+  const shell = new HeadShell(c, pts, half);
+  const R = Math.max(half.x, half.z);
+  // baseball cap: dome + bill
+  const domeLine = line(1.12, 1.45, 1.75);
+  B.addRigid(shell.cap(domeLine, () => 0.012, 12), HEAD, Paint.ProcHat, variant(Cat.Hat, HAT_IDS.cap));
+  B.addRigid(buildBill(shell, 1.12, R * 0.95, 0.012), HEAD, Paint.ProcHatTrim, variant(Cat.Hat, HAT_IDS.cap), () => 0.85);
+  // police cap: flat-topped crown + black visor
+  B.addRigid(shell.cap(line(1.15, 1.42, 1.62), (u) => 0.014 + 0.028 * smooth(0.0, 0.55, 1 - u), 12), HEAD, Paint.ProcHat, variant(Cat.Hat, HAT_IDS.police));
+  B.addRigid(buildBill(shell, 1.15, R * 0.75, 0.01), HEAD, Paint.ProcHatTrim, variant(Cat.Hat, HAT_IDS.police), () => 0.18);
+  // helmet: thick shell down over the ears, dark visor strip
+  B.addRigid(shell.cap(line(1.12, 1.78, 1.95), () => 0.028, 14), HEAD, Paint.ProcHat, variant(Cat.Hat, HAT_IDS.helmet));
+  B.addRigid(shell.cap(() => 1.32, () => 0.038, 3, -0.9, 0.9, 12), HEAD, Paint.ProcHatTrim, variant(Cat.Hat, HAT_IDS.helmet), () => 0.25);
+  // beanie: soft dome with a folded band
+  B.addRigid(shell.cap(line(1.12, 1.55, 1.85), (u) => 0.014 + 0.025 * (1 - u) ** 2, 14), HEAD, Paint.ProcHat, variant(Cat.Hat, HAT_IDS.beanie));
+  const bl = line(1.12, 1.55, 1.85);
+  B.addRigid(shell.band((phi) => bl(phi) - 0.24, bl, () => 0.022, 3), HEAD, Paint.ProcHatTrim, variant(Cat.Hat, HAT_IDS.beanie), () => 0.82);
 }
 
 /** Cap visor / bill: a flat, slightly drooping half-disc at the front hairline. */
@@ -532,70 +296,8 @@ function addItems(B: Builder, rig: RigData, body: RigBody): void {
     for (const [g, shade] of parts) {
       g.applyMatrix4(M);
       g.computeVertexNormals();
-      B.addRigid(g, HR, Region.Item, variant(Cat.Item, ITEM_IDS[name]), () => shade);
+      B.addRigid(g, HR, Paint.Item, variant(Cat.Item, ITEM_IDS[name]), () => shade);
     }
   }
 }
 
-/** Jacket / suit / vest: offset shells of the torso + arm triangles, weights copied from the body. */
-function addOuter(B: Builder, body: RigBody): void {
-  const P = body.position, N = body.normal;
-  const waist = (() => {
-    let y = 0;
-    let n = 0;
-    for (let i = 0; i < body.vertexCount; i++) if (body.region[i] === Region.Hips) {
-      y += P[i * 3 + 1]!;
-      n++;
-    }
-    return n ? y / n : 1;
-  })();
-  const kinds: [number, boolean, number][] = [
-    [OUTER_IDS.jacket, true, 0.014],
-    [OUTER_IDS.vest, false, 0.03],
-  ];
-  for (const [id, sleeves, thick] of kinds) {
-    const vari = variant(Cat.Outer, id);
-    const map = new Map<number, number>();
-    const use = (i: number): boolean => {
-      const r = body.region[i]!;
-      const y = P[i * 3 + 1]!;
-      if (r === Region.Chest || r === Region.Belly) return true; // the open front is painted (no jagged cut)
-      if (r === Region.Hips) return id !== OUTER_IDS.vest ? y > waist - 0.04 : y > waist + 0.02;
-      if (!sleeves) return false;
-      return r === Region.UpperArm || r === Region.LowerArm;
-    };
-    // vertices on the shell's border (shared with uncovered triangles) stay on the skin: no spiky hems
-    const inside = new Uint8Array(body.vertexCount);
-    for (let i = 0; i < body.vertexCount; i++) inside[i] = use(i) ? 1 : 0;
-    const border = new Uint8Array(body.vertexCount);
-    for (let t = 0; t < body.index.length; t += 3) {
-      const a = body.index[t]!, b = body.index[t + 1]!, c = body.index[t + 2]!;
-      if (inside[a]! && inside[b]! && inside[c]!) continue;
-      border[a] = border[b] = border[c] = 1;
-    }
-    for (let t = 0; t < body.index.length; t += 3) {
-      const a = body.index[t]!, b = body.index[t + 1]!, c = body.index[t + 2]!;
-      if (!inside[a] || !inside[b] || !inside[c]) continue;
-      for (const i of [a, b, c]) {
-        let j = map.get(i);
-        if (j === undefined) {
-          j = B.count;
-          map.set(i, j);
-          const nx = N[i * 4]! / 127, ny = N[i * 4 + 1]! / 127, nz = N[i * 4 + 2]! / 127;
-          const r = body.region[i]!;
-          const k = (r === Region.LowerArm ? thick * 0.75 : thick) * (border[i] ? 0.35 : 1);
-          B.pos.push(P[i * 3]! + nx * k, P[i * 3 + 1]! + ny * k, P[i * 3 + 2]! + nz * k);
-          B.nrm.push(nx, ny, nz);
-          for (let q = 0; q < 4; q++) {
-            B.si.push(body.skinIndex[i * 4 + q]!);
-            B.sw.push(body.skinWeight[i * 4 + q]!);
-          }
-          B.reg.push(id === OUTER_IDS.vest ? Region.Vest : Region.Outer);
-          B.vari.push(vari);
-          B.shade.push(255);
-        }
-        B.idx.push(j);
-      }
-    }
-  }
-}

@@ -159,7 +159,8 @@ export function forwardKinematics(rig: RigData, body: RigBody, pose: LocalPose, 
       const px = Q[k]!, py = Q[k + 1]!, pz = Q[k + 2]!, pw = Q[k + 3]!;
       mulQ(px, py, pz, pw, L[j]!, L[j + 1]!, L[j + 2]!, L[j + 3]!, Q, j);
       const isPelvis = i === pelvis;
-      const tx = isPelvis ? pose.pelvis[0]! : T[i * 3]!, ty = isPelvis ? pose.pelvis[1]! : T[i * 3 + 1]!, tz = isPelvis ? pose.pelvis[2]! : T[i * 3 + 2]!;
+      const po = body.pelvisOffset;
+      const tx = isPelvis ? pose.pelvis[0]! + po[0]! : T[i * 3]!, ty = isPelvis ? pose.pelvis[1]! + po[1]! : T[i * 3 + 1]!, tz = isPelvis ? pose.pelvis[2]! + po[2]! : T[i * 3 + 2]!;
       rotate(px, py, pz, pw, tx, ty, tz, P, i * 3);
       P[i * 3]! += P[p * 3]!;
       P[i * 3 + 1]! += P[p * 3 + 1]!;
@@ -229,10 +230,10 @@ export function boneWorld(model: ModelPose, bone: number, x: number, y: number, 
 }
 const _t3 = new Float32Array(3);
 
-/** Rest (bind) local pose of a body. */
+/** Rest (bind) local pose of a body (pelvis in clip space: FK adds the body's pelvis offset). */
 export function restPose(body: RigBody, out: LocalPose, pelvis: number): void {
   out.q.set(body.restQ);
-  out.pelvis[0] = body.restT[pelvis * 3]!;
-  out.pelvis[1] = body.restT[pelvis * 3 + 1]!;
-  out.pelvis[2] = body.restT[pelvis * 3 + 2]!;
+  out.pelvis[0] = body.restT[pelvis * 3]! - body.pelvisOffset[0]!;
+  out.pelvis[1] = body.restT[pelvis * 3 + 1]! - body.pelvisOffset[1]!;
+  out.pelvis[2] = body.restT[pelvis * 3 + 2]! - body.pelvisOffset[2]!;
 }

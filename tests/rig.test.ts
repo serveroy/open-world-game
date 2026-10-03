@@ -4,6 +4,9 @@ import { decodeRig } from '../src/characters/rig/RigData';
 import { LocalPose, ModelPose, blendClip, boneWorld, forwardKinematics, restPose, writeSkin } from '../src/characters/rig/PoseEval';
 import { AnimController, AnimLibrary } from '../src/characters/rig/AnimGraph';
 import { makeAnimState, makePose } from '../src/characters/Pose';
+import { WARDROBE_PARTS, pickParts } from '../src/characters/rig/wardrobe';
+import { policeAppearance, randomAppearance, defaultPlayerAppearance } from '../src/characters/Appearance';
+import { Rng } from '../src/core/rng';
 
 const buf = readFileSync(new URL('../src/assets/chars.bin', import.meta.url));
 const rig = decodeRig(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
@@ -26,19 +29,44 @@ function at(m: ModelPose, bone: string, yaw = 0): { x: number; y: number; z: num
 }
 
 describe('character rig asset', () => {
-  it('decodes skeleton, two bodies and the clip set', () => {
+  it('decodes skeleton, two body types, dressed parts and the clip set', () => {
     expect(nb).toBeGreaterThan(50);
     expect(rig.bodies.map((b) => b.name)).toEqual(['male', 'female']);
     expect(rig.parents[0]).toBe(-1);
     for (let i = 1; i < nb; i++) expect(rig.parents[i]!).toBeLessThan(i);
     for (const c of ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Driving_Loop', 'Pistol_Aim_Neutral', 'Punch_Jab', 'LayToIdle']) expect(rig.clipIndex.has(c)).toBe(true);
-    for (const b of rig.bodies) {
-      expect(b.index.length % 3).toBe(0);
-      expect(Math.max(...b.index)).toBeLessThan(b.vertexCount);
-      for (let i = 0; i < b.vertexCount; i++) {
-        const s = b.skinWeight[i * 4]! + b.skinWeight[i * 4 + 1]! + b.skinWeight[i * 4 + 2]! + b.skinWeight[i * 4 + 3]!;
+    expect(rig.parts.length).toBeGreaterThan(50);
+    for (const p of rig.parts) {
+      expect(p.index.length % 3).toBe(0);
+      expect(Math.max(...p.index)).toBeLessThan(p.vertexCount);
+      for (let i = 0; i < p.vertexCount; i++) {
+        const s = p.skinWeight[i * 4]! + p.skinWeight[i * 4 + 1]! + p.skinWeight[i * 4 + 2]! + p.skinWeight[i * 4 + 3]!;
         expect(s).toBe(255);
+        expect(p.skinIndex[i * 4]!).toBeLessThan(nb);
       }
+    }
+  });
+
+  it('every part the wardrobe can pick exists for its body type', () => {
+    for (const n of WARDROBE_PARTS.male) expect(() => rig.part(0, n)).not.toThrow();
+    for (const n of WARDROBE_PARTS.female) expect(() => rig.part(1, n)).not.toThrow();
+  });
+
+  it('dressed parts stand on the ground at human height', () => {
+    for (const b of [0, 1]) {
+      let minY = 9, maxY = -9;
+      for (const n of ['Casual_Head', 'Casual_Feet']) {
+        const p = rig.parts[rig.part(b, n)]!;
+        for (let i = 0; i < p.vertexCount; i++) {
+          const y = p.position[i * 4 + 1]! / p.quant;
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+        }
+      }
+      expect(minY).toBeLessThan(0.03);
+      expect(minY).toBeGreaterThan(-0.03);
+      expect(maxY).toBeGreaterThan(1.7);
+      expect(maxY).toBeLessThan(2.0);
     }
   });
 
@@ -79,7 +107,7 @@ describe('character rig asset', () => {
   it('idle clip stands upright on the ground facing +Z', () => {
     const m = pose((lp) => blendClip(rig, rig.clips[rig.clipIndex.get('Idle_Loop')!]!, 0.3, 1, lp));
     const head = at(m, 'Head'), fl = at(m, 'foot_l'), fr = at(m, 'foot_r'), hl = at(m, 'hand_l');
-    expect(head.y).toBeGreaterThan(1.45);
+    expect(head.y).toBeGreaterThan(1.4);
     expect(head.y).toBeLessThan(1.75);
     expect(Math.min(fl.y, fr.y)).toBeLessThan(0.15);
     expect(hl.x).toBeGreaterThan(0.1); // left hand on +X
@@ -188,5 +216,29 @@ describe('animation graph', () => {
       for (const v of lp.q) expect(Number.isFinite(v)).toBe(true);
     }
     void P;
+  });
+});
+
+describe('wardrobe', () => {
+  it('maps appearances onto existing parts (random crowd, police, swat, player)', () => {
+    const rng = new Rng(3);
+    const apps = [defaultPlayerAppearance(), policeAppearance(rng), policeAppearance(rng, true)];
+    for (let i = 0; i < 300; i++) apps.push(randomAppearance(rng, { nightlife: i % 3 === 0, desert: i % 5 === 0 }));
+    for (const a of apps) {
+      const p = pickParts(a);
+      const b = a.female ? 1 : 0;
+      for (const n of [p.head, p.body, p.legs, p.feet]) expect(() => rig.part(b, n)).not.toThrow();
+    }
+  });
+  it('dresses police in uniform and SWAT in armour', () => {
+    const rng = new Rng(5);
+    for (let i = 0; i < 20; i++) {
+      const cop = policeAppearance(rng);
+      const p = pickParts(cop);
+      expect(p.hat).toBe('police');
+      expect(p.legs).toBe(cop.female ? 'Soldier_Legs' : 'Suit_Legs');
+      const swat = pickParts(policeAppearance(rng, true));
+      expect(swat.body).toMatch(/Swat_Body|Soldier_Body/);
+    }
   });
 });

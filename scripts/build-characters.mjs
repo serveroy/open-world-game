@@ -1,25 +1,26 @@
-// Offline character asset build: Quaternius "Universal Animation Library" 1 + 2 (Standard, CC0)
-// → src/assets/chars.bin (skeleton, two simplified body meshes, quantized animation clips).
+// Offline character asset build → src/assets/chars.bin
+//  - skeleton + 51 motion clips: Quaternius "Universal Animation Library" 1 + 2 (Standard, CC0)
+//  - dressed bodies: Quaternius "Ultimate Modular Men" / "Ultimate Modular Women" (CC0), whose
+//    head / body / legs / feet parts are rebound onto the animation skeleton (per gender)
 //
-// Usage: node scripts/build-characters.mjs <UAL1_Standard.glb> <UAL2_Standard.glb> <Mannequin_F.glb> [out.bin]
-// (the Unreal-Godot GLB variants from the itch.io Standard zips). Only geometry, skin weights,
-// bind poses and bone rotations are read; materials, textures and extras are dropped.
+// Usage: node scripts/build-characters.mjs <UAL1_Standard.glb> <UAL2_Standard.glb> <modularDir> [out.bin]
+//   <modularDir> holds men/*.fbx and women/*.fbx (the "Individual Characters/FBX" files of each pack).
+// Only geometry, skin weights, bind poses, material colours and bone rotations are read.
 //
-// File layout: "CCR1" | u32 jsonBytes | JSON (padded to 4) | binary blob. JSON holds offsets into the blob.
+// File layout: "CCR2" | u32 jsonBytes | JSON (padded to 4) | binary blob. JSON holds offsets into the blob.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const [ual1Path, ual2Path, femalePath, outPath = 'src/assets/chars.bin'] = process.argv.slice(2);
-if (!femalePath) {
-  console.error('usage: node scripts/build-characters.mjs UAL1_Standard.glb UAL2_Standard.glb Mannequin_F.glb [out.bin]');
+const [ual1Path, ual2Path, modularDir, outPath = 'src/assets/chars.bin'] = process.argv.slice(2);
+if (!modularDir) {
+  console.error('usage: node scripts/build-characters.mjs UAL1_Standard.glb UAL2_Standard.glb <modularDir> [out.bin]');
   process.exit(1);
 }
 
 const FPS = 30;
-/** Triangle budget per body (the source meshes are ~14k / ~25k triangles). */
-const BODY_TRIS = 6500;
 
 /** Clips shipped with the game (source name → loop?). Everything else in the libraries is skipped. */
 const CLIPS = [
@@ -37,187 +38,276 @@ const CLIPS = [
 /** Loops whose natural ground speed is measured from the feet (m/s). */
 const LOCOMOTION = ['Walk_Loop', 'Walk_Formal_Loop', 'Walk_Carry_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Crouch_Fwd_Loop', 'Zombie_Walk_Fwd_Loop'];
 
-/** Body regions (painted by the clothing shader). Keep in sync with src/characters/rig/regions.ts. */
-const REGION = { head: 0, neck: 1, chest: 2, belly: 3, hips: 4, upperArm: 5, lowerArm: 6, hand: 7, thigh: 8, calf: 9, foot: 10 };
-function regionOf(bone) {
-  if (bone === 'Head') return REGION.head;
-  if (bone === 'neck_01') return REGION.neck;
-  if (bone === 'spine_03' || bone.startsWith('clavicle')) return REGION.chest;
-  if (bone === 'spine_02' || bone === 'spine_01') return REGION.belly;
-  if (bone === 'pelvis' || bone === 'root') return REGION.hips;
-  if (bone.startsWith('upperarm')) return REGION.upperArm;
-  if (bone.startsWith('lowerarm')) return REGION.lowerArm;
-  if (bone.startsWith('thigh')) return REGION.thigh;
-  if (bone.startsWith('calf')) return REGION.calf;
-  if (bone.startsWith('foot') || bone.startsWith('ball')) return REGION.foot;
-  return REGION.hand; // hand + fingers
-}
 
-async function load(path) {
+async function loadGlb(path) {
   const buf = await readFile(path);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   const g = await new Promise((res, rej) => new GLTFLoader().parse(ab, '', res, rej));
   g.scene.updateMatrixWorld(true);
   return g;
 }
-
-const [g1, g2, gf] = await Promise.all([load(ual1Path), load(ual2Path), load(femalePath)]);
-await MeshoptSimplifier.ready;
-
-function skinnedMeshes(g) {
-  const out = [];
-  g.scene.traverse((o) => {
-    if (o.isSkinnedMesh) out.push(o);
-  });
-  if (!out.length) throw new Error('no skinned mesh');
-  return out;
+async function loadFbx(path) {
+  const buf = await readFile(path);
+  const warn = console.warn;
+  console.warn = () => {}; // "more than 4 skinning weights" notices
+  const o = new FBXLoader().parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+  console.warn = warn;
+  o.updateMatrixWorld(true);
+  return o;
 }
 
-// ---------- skeleton (from the male rig) ----------
-const maleMeshes = skinnedMeshes(g1);
-const femaleMeshes = skinnedMeshes(gf);
-const srcBones = maleMeshes[0].skeleton.bones;
-// prune weightless leaf bones (finger tips, ball_leaf): they only exist for IK in DCC tools
-const weighted = new Set();
-for (const m of [...maleMeshes, ...femaleMeshes]) {
-  const si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight;
-  for (let i = 0; i < si.count; i++) for (let k = 0; k < 4; k++) if (sw.getComponent(i, k) > 0) weighted.add(m.skeleton.bones[si.getComponent(i, k)].name);
-}
-const keep = (b) => weighted.has(b.name) || b.children.some((c) => c.isBone && keep(c)) || !b.name.includes('leaf');
-const bones = srcBones.filter(keep);
+const [g1, g2] = await Promise.all([loadGlb(ual1Path), loadGlb(ual2Path)]);
+
+// ---------- skeleton (UAL), leaf bones dropped ----------
+let ualMesh = null;
+g1.scene.traverse((o) => {
+  if (o.isSkinnedMesh && !ualMesh) ualMesh = o;
+});
+const bones = ualMesh.skeleton.bones.filter((b) => !b.name.includes('leaf'));
 const boneIndex = new Map(bones.map((b, i) => [b.name, i]));
 const parents = bones.map((b) => (b.parent?.isBone ? boneIndex.get(b.parent.name) : -1));
 for (let i = 0; i < bones.length; i++) if (parents[i] >= i) throw new Error('bones not in parent-first order');
-console.log(`bones: ${bones.length} (of ${srcBones.length})`);
+console.log(`bones: ${bones.length}`);
 
-/** Rest locals for a rig (by bone name); the root folds in its non-bone ancestors (Armature node). */
-function restOf(meshes) {
-  const byName = new Map();
-  meshes[0].skeleton.bones.forEach((b) => byName.set(b.name, b));
-  const T = new Float32Array(bones.length * 3), Q = new Float32Array(bones.length * 4), inv = new Float32Array(bones.length * 16);
+/** UAL rest pose: local T/Q (root folds in the Armature node) and model-space rotations / positions. */
+const ual = (() => {
+  const T = new Float32Array(bones.length * 3), Q = new Float32Array(bones.length * 4);
+  const MQ = [], MP = [];
   const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-  bones.forEach((ref, i) => {
-    const b = byName.get(ref.name);
-    if (!b) throw new Error('missing bone ' + ref.name);
+  bones.forEach((b, i) => {
     if (parents[i] < 0) m.copy(b.parent.matrixWorld).multiply(b.matrix);
     else m.copy(b.matrix);
     m.decompose(p, q, s);
-    if (Math.abs(s.x - 1) > 1e-3 || Math.abs(s.y - 1) > 1e-3 || Math.abs(s.z - 1) > 1e-3) throw new Error('scaled bone ' + b.name);
     T.set([p.x, p.y, p.z], i * 3);
     Q.set([q.x, q.y, q.z, q.w], i * 4);
-    // inverse bind = inverse of the bone's rest model matrix (rest pose == bind pose, checked below)
-    inv.set(m.copy(b.matrixWorld).invert().elements, i * 16);
+    b.matrixWorld.decompose(p, q, s);
+    MQ.push(q.clone());
+    MP.push(p.clone());
   });
-  // check: rest pose == bind pose (bone.matrixWorld × boneInverse × bindMatrix ≈ bindMatrix)
-  const sk = meshes[0].skeleton, bm = meshes[0].bindMatrix;
-  let err2 = 0;
-  sk.bones.forEach((b, i) => {
-    m.multiplyMatrices(b.matrixWorld, sk.boneInverses[i]).multiply(bm);
-    for (let k = 0; k < 16; k++) err2 = Math.max(err2, Math.abs(m.elements[k] - bm.elements[k]));
-  });
-  if (err2 > 1e-3) throw new Error('rest pose differs from bind pose: ' + err2);
-  return { T, Q, inv, byName };
+  return { T, Q, MQ, MP };
+})();
+
+// ---------- modular characters ----------
+/** Curated outfits (fantasy / sci-fi ones are left out of a modern city). */
+const OUTFITS = {
+  male: ['Casual', 'Casual2', 'Beach', 'Punk', 'Suit', 'Worker', 'Farmer', 'Adventurer', 'Swat'],
+  female: ['Casual', 'Formal', 'Punk', 'Suit', 'Worker', 'Adventurer', 'Soldier'],
+};
+/** Paint slots (keep in sync with src/characters/rig/regions.ts `Paint`). */
+const P = { skin: 0, hair: 1, brow: 2, eye: 3, top1: 4, top2: 5, bottom: 6, shoes: 7, hat: 8, fixed: 9, face: 10 };
+/** Material → paint slot per part ("Outfit_Kind/Material"); unlisted: Skin*→skin, Eye→eye, Eyebrows→brow, Hair*→hair, else fixed. */
+const PAINT = {
+  male: {
+    'Casual_Body/Purple': 'top1', 'Casual_Legs/LightBlue': 'bottom', 'Casual_Feet/Purple': 'shoes',
+    'Casual2_Body/LightBrown': 'top1', 'Casual2_Legs/LightBlue': 'bottom', 'Casual2_Feet/Red_Dark': 'shoes',
+    'Beach_Body/LightBrown': 'top1', 'Beach_Legs/Red_Dark': 'bottom', 'Beach_Feet/Red_Dark': 'shoes',
+    'Punk_Head/Red': 'hair', 'Punk_Head/Red_Dark': 'hair', 'Punk_Body/White': 'top1', 'Punk_Body/Black': 'top2', 'Punk_Legs/LightBlue': 'bottom', 'Punk_Feet/Black': 'shoes',
+    'Suit_Body/White': 'top1', 'Suit_Body/Suit': 'top2', 'Suit_Legs/Suit': 'bottom', 'Suit_Feet/Black': 'shoes',
+    'Worker_Head/Moustache': 'brow', 'Worker_Body/LightBrown': 'top1', 'Worker_Legs/Brown': 'bottom', 'Worker_Feet/Grey': 'shoes',
+    'Farmer_Head/Beige': 'hat', 'Farmer_Body/LightBlue': 'top1', 'Farmer_Body/Brown': 'top2', 'Farmer_Pants/LightBlue': 'bottom', 'Farmer_Feet/Brown': 'shoes',
+    'Adventurer_Body/LightGreen': 'top1', 'Adventurer_Body/Green': 'top2', 'Adventurer_Legs/Brown': 'bottom', 'Adventurer_Feet/Grey': 'shoes',
+  },
+  female: {
+    'Casual_Head/Hair_Brown': 'brow', 'Casual_Head/Brown': 'eye', 'Casual_Body/White': 'top1', 'Casual_Legs/Orange': 'bottom', 'Casual_Feet/Grey': 'shoes',
+    'Formal_Head/Red': 'hair', 'Formal_Head/Brown': 'eye', 'Formal_Body/LimeGreen': 'top1', 'Formal_Legs/LimeGreen': 'top1', 'Formal_Feet/Red': 'shoes',
+    'Punk_Head/Pink': 'hair', 'Punk_Head/Hair_Brown': 'brow', 'Punk_Head/Brown': 'eye', 'Punk_Body/Pink': 'top1', 'Punk_Body/Black': 'top2', 'Punk_Legs/Black': 'bottom', 'Punk_Feet/Black': 'shoes',
+    'Suit_Head/Hair_Brown': 'brow', 'Suit_Head/Brown': 'eye', 'Suit_Body/White': 'top1', 'Suit_Body/Black': 'top2', 'Suit_Legs/Black': 'bottom', 'Suit_Feet/Black': 'shoes',
+    'Worker_Head/DarkBrown': 'hair', 'Worker_Head/Brown': 'eye', 'Worker_Body/White': 'top1', 'Worker_Legs/Brown_02': 'bottom', 'Worker_Feet/Black': 'shoes',
+    'Adventurer_Head/Hair_Brown': 'hair', 'Adventurer_Head/Brown': 'eye', 'Adventurer_Body/LightGreen': 'top1', 'Adventurer_Body/Green': 'top2', 'Adventurer_Legs/LightGreen': 'bottom', 'Adventurer_Feet/Brown_02': 'shoes',
+    'Soldier_Head/Hair_Brown': 'hair', 'Soldier_Head/Brown': 'eye', 'Soldier_Body/Swat': 'top1', 'Soldier_Body/Black': 'top2', 'Soldier_Legs/Swat': 'bottom', 'Soldier_Feet/Grey': 'shoes',
+  },
+};
+function paintOf(gender, part, mat) {
+  const key = `${part}/${mat}`;
+  const t = PAINT[gender][key];
+  if (t) return P[t];
+  if (/^Skin/.test(mat)) return P.skin;
+  if (mat === 'Eye') return P.eye;
+  if (mat === 'Eyebrows') return P.brow;
+  if (/^Hair/.test(mat)) return P.hair;
+  return P.fixed;
+}
+const KIND = { Head: 0, Body: 1, Legs: 2, Pants: 2, Feet: 3 };
+
+/** Modular joint name for a UAL bone, per gender (finger chains are matched by order). */
+function jointMap(names) {
+  const map = new Map([
+    ['pelvis', 'Hips'], ['spine_01', 'Abdomen'], ['spine_02', 'Torso'], ['spine_03', 'Chest'], ['neck_01', 'Neck'], ['Head', 'Head'],
+  ]);
+  for (const [s, S] of [['l', 'L'], ['r', 'R']]) {
+    map.set(`clavicle_${s}`, `Shoulder${S}`);
+    map.set(`upperarm_${s}`, `UpperArm${S}`);
+    map.set(`lowerarm_${s}`, `LowerArm${S}`);
+    map.set(`hand_${s}`, `Hand${S}`);
+    map.set(`thigh_${s}`, `UpperLeg${S}`);
+    map.set(`calf_${s}`, `LowerLeg${S}`);
+    for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb']) {
+      const F = f[0].toUpperCase() + f.slice(1);
+      const chain = names.filter((n) => new RegExp(`^${F}\\d${S}$`).test(n)).sort();
+      // UAL chains have 3 joints; a 2-joint modular chain fills the outer two
+      const off = 3 - chain.length;
+      chain.forEach((n, k) => map.set(`${f}_0${k + 1 + off}_${s}`, n));
+    }
+  }
+  return map;
 }
 
-// ---------- bodies ----------
-function buildBody(name, meshes) {
-  const rest = restOf(meshes);
-  const pos = [], nrm = [], si = [], sw = [], reg = [], idx = [];
-  const nm = new THREE.Matrix3(), v = new THREE.Vector3();
-  for (const mesh of meshes) {
-    const g = mesh.geometry;
-    const base = pos.length / 3;
-    nm.getNormalMatrix(mesh.bindMatrix);
-    const P = g.attributes.position, N = g.attributes.normal, I = g.attributes.skinIndex, W = g.attributes.skinWeight;
-    for (let i = 0; i < P.count; i++) {
-      v.fromBufferAttribute(P, i).applyMatrix4(mesh.bindMatrix);
-      pos.push(v.x, v.y, v.z);
-      v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize();
-      nrm.push(v.x, v.y, v.z);
-      let best = 0, bw = -1;
-      const ids = [], ws = [];
-      for (let k = 0; k < 4; k++) {
-        const bn = mesh.skeleton.bones[I.getComponent(i, k)].name;
-        const w = W.getComponent(i, k);
-        let j = boneIndex.get(bn);
-        if (j === undefined) j = boneIndex.get(mesh.skeleton.bones[I.getComponent(i, k)].parent.name);
-        ids.push(j);
-        ws.push(w);
-        if (w > bw) {
-          bw = w;
-          best = j;
+const QS = 16384; // position quantization (int16 / QS metres)
+const skeletons = [];
+const parts = [];
+const partHashes = new Map();
+for (const gender of ['male', 'female']) {
+  const dir = join(modularDir, gender === 'male' ? 'men' : 'women');
+  const objs = [];
+  for (const name of OUTFITS[gender]) objs.push([name, await loadFbx(join(dir, name + '.fbx'))]);
+  // modular bind-pose joints (metres) from the first character (all share one skeleton per gender)
+  const ref = objs[0][1];
+  const J = new Map();
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  ref.traverse((o) => {
+    if (o.isBone && !J.has(o.name)) {
+      o.matrixWorld.decompose(p, q, s);
+      J.set(o.name, p.clone().multiplyScalar(0.01));
+    }
+  });
+  const jm = jointMap([...J.keys()]);
+  // target positions for every UAL bone
+  const pos = bones.map((b, i) => {
+    const n = jm.get(b.name);
+    if (n && J.has(n)) return J.get(n).clone();
+    return null;
+  });
+  // feet: the modular foot joint sits at the sole; pivot at the ankle instead (weights are unchanged)
+  for (const sd of ['l', 'r']) {
+    const fi = boneIndex.get(`foot_${sd}`), ci = boneIndex.get(`calf_${sd}`);
+    const sole = J.get(`Foot${sd.toUpperCase()}`);
+    pos[fi] = new THREE.Vector3(sole.x, 0.085, sole.z - 0.015);
+    const end = J.get(`Foot${sd.toUpperCase()}_end`) ?? sole.clone().add(new THREE.Vector3(0, 0, 0.15));
+    pos[boneIndex.get(`ball_${sd}`)] = new THREE.Vector3(sole.x, 0.03, sole.z + (end.z - sole.z) * 0.6 + 0.06);
+    void ci;
+  }
+  pos[0] = new THREE.Vector3(0, 0, 0); // root
+  // anything still unmapped (e.g. a missing thumb base): halfway between parent and first mapped child
+  for (let i = 0; i < bones.length; i++) {
+    if (pos[i]) continue;
+    const kid = bones.findIndex((_, k) => parents[k] === i && pos[k]);
+    pos[i] = kid >= 0 ? pos[parents[i]].clone().lerp(pos[kid], 0.45) : pos[parents[i]].clone().add(ual.MP[i].clone().sub(ual.MP[parents[i]]));
+  }
+  // rest locals: UAL rest rotations (same T-pose conventions), modular joint positions
+  const T = new Float32Array(bones.length * 3), Q = new Float32Array(ual.Q);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < bones.length; i++) {
+    const pa = parents[i];
+    if (pa < 0) v.copy(pos[i]);
+    else v.subVectors(pos[i], pos[pa]).applyQuaternion(ual.MQ[pa].clone().invert());
+    T.set([v.x, v.y, v.z], i * 3);
+  }
+  const pel = boneIndex.get('pelvis');
+  const pelvisOffset = [0, 1, 2].map((a) => T[pel * 3 + a] - ual.T[pel * 3 + a]);
+  const legU = ual.MP[boneIndex.get('thigh_l')].y - ual.MP[boneIndex.get('foot_l')].y;
+  const legM = pos[boneIndex.get('thigh_l')].y - pos[boneIndex.get('foot_l')].y;
+  skeletons.push({ gender, T, Q, pelvisOffset, legScale: legM / legU });
+  console.log(`${gender}: pelvis ${pos[pel].toArray().map((x) => x.toFixed(3))}, leg scale ${(legM / legU).toFixed(3)}`);
+
+  // name → UAL index for skinning (end joints fall back to their parent)
+  const toUal = new Map();
+  for (const [u, n] of jm) toUal.set(n, boneIndex.get(u));
+  toUal.set('Root', 0);
+  toUal.set(`FootL`, boneIndex.get('foot_l'));
+  toUal.set(`FootR`, boneIndex.get('foot_r'));
+
+  for (const [outfit, obj] of objs) {
+    obj.traverse((mesh) => {
+      if (!mesh.isSkinnedMesh) return;
+      const kindName = mesh.name.split('_').pop();
+      if (!(kindName in KIND)) return; // e.g. the adventurer's backpack
+      const partName = `${outfit}_${kindName}`;
+      const g = mesh.geometry;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const groups = g.groups.length ? g.groups : [{ start: 0, count: g.attributes.position.count, materialIndex: 0 }];
+      const sk = mesh.skeleton;
+      const boneMapIdx = sk.bones.map((b) => {
+        let n = b;
+        while (n && n.isBone && !toUal.has(n.name)) n = n.parent;
+        return n && toUal.has(n.name) ? toUal.get(n.name) : 0;
+      });
+      const nm = new THREE.Matrix3().getNormalMatrix(mesh.bindMatrix);
+      const Pa = g.attributes.position, Na = g.attributes.normal, Ia = g.attributes.skinIndex, Wa = g.attributes.skinWeight;
+      // weld by quantized position + paint + colour (flat shading comes from screen-space derivatives)
+      const key = new Map();
+      const vp = [], vn = [], vi = [], vw = [], vc = [];
+      const idx = [];
+      const w = new THREE.Vector3(), n3 = new THREE.Vector3();
+      for (const gr of groups) {
+        const mat = mats[gr.materialIndex];
+        let paint = paintOf(gender, `${outfit}_${kindName}`, mat.name);
+        if (paint === P.skin && KIND[kindName] === 0) paint = P.face; // face skin (beards are painted on it)
+        const col = mat.color.getHex();
+        for (let k = gr.start; k < gr.start + gr.count; k++) {
+          w.fromBufferAttribute(Pa, k).applyMatrix4(mesh.bindMatrix).multiplyScalar(0.01);
+          const qx = Math.round(w.x * QS), qy = Math.round(w.y * QS), qz = Math.round(w.z * QS);
+          const kk = `${qx},${qy},${qz},${paint},${col}`;
+          let id = key.get(kk);
+          n3.fromBufferAttribute(Na, k).applyMatrix3(nm).normalize();
+          if (id === undefined) {
+            id = vp.length / 3;
+            key.set(kk, id);
+            vp.push(qx, qy, qz);
+            vn.push(0, 0, 0);
+            // remap + renormalize weights onto UAL bones (merge duplicates)
+            const acc = new Map();
+            for (let c = 0; c < 4; c++) {
+              const wt = Wa.getComponent(k, c);
+              if (wt <= 0) continue;
+              const b = boneMapIdx[Ia.getComponent(k, c)];
+              acc.set(b, (acc.get(b) ?? 0) + wt);
+            }
+            const top = [...acc].sort((a, b) => b[1] - a[1]).slice(0, 4);
+            const sum = top.reduce((a, b) => a + b[1], 0) || 1;
+            const qw = top.map(([, x]) => Math.round((x / sum) * 255));
+            if (qw.length) qw[0] += 255 - qw.reduce((a, b) => a + b, 0);
+            for (let c = 0; c < 4; c++) {
+              vi.push(top[c]?.[0] ?? 0);
+              vw.push(qw[c] ?? 0);
+            }
+            vc.push((col >> 16) & 255, (col >> 8) & 255, col & 255, paint);
+          }
+          vn[id * 3] += n3.x;
+          vn[id * 3 + 1] += n3.y;
+          vn[id * 3 + 2] += n3.z;
+          idx.push(id);
         }
       }
-      si.push(...ids);
-      sw.push(...ws);
-      reg.push(regionOf(bones[best].name));
-    }
-    const index = g.index;
-    for (let i = 0; i < index.count; i++) idx.push(base + index.getX(i));
+      const nv = vp.length / 3;
+      if (nv > 65535) throw new Error('part too big ' + partName);
+      const nrm = new Int8Array(nv * 4);
+      for (let i = 0; i < nv; i++) {
+        const l = Math.hypot(vn[i * 3], vn[i * 3 + 1], vn[i * 3 + 2]) || 1;
+        for (let a = 0; a < 3; a++) nrm[i * 4 + a] = Math.round((vn[i * 3 + a] / l) * 127);
+      }
+      const position = new Int16Array(nv * 4);
+      for (let i = 0; i < nv; i++) position.set([vp[i * 3], vp[i * 3 + 1], vp[i * 3 + 2], 0], i * 4);
+      // identical parts (e.g. women's Casual and Suit heads) are stored once
+      let h = 0;
+      for (const x of vp) h = (Math.imul(h, 31) + x) | 0;
+      for (const x of vc) h = (Math.imul(h, 31) + x) | 0;
+      const hk = `${gender}:${KIND[kindName]}:${nv}:${h}`;
+      if (partHashes.has(hk)) {
+        partHashes.get(hk).aliases.push(partName);
+        return;
+      }
+      const part = {
+        name: partName, gender, kind: KIND[kindName], vertexCount: nv, aliases: [],
+        position, normal: nrm, skinIndex: new Uint8Array(vi), skinWeight: new Uint8Array(vw), color: new Uint8Array(vc), index: new Uint16Array(idx),
+      };
+      partHashes.set(hk, part);
+      parts.push(part);
+    });
   }
-  let positions = new Float32Array(pos);
-  const vcount0 = positions.length / 3;
-  // weld exact duplicates (UV seams) by position + normal
-  const key = new Map();
-  const remap = new Uint32Array(vcount0);
-  let uniq = 0;
-  const firstOf = [];
-  for (let i = 0; i < vcount0; i++) {
-    const k = [0, 1, 2].map((a) => Math.round(pos[i * 3 + a] * 1e4)).join(',') + '|' + [0, 1, 2].map((a) => Math.round(nrm[i * 3 + a] * 50)).join(',');
-    let j = key.get(k);
-    if (j === undefined) {
-      j = uniq++;
-      key.set(k, j);
-      firstOf.push(i);
-    }
-    remap[i] = j;
-  }
-  const pick = (arr, n) => {
-    const out = [];
-    for (const i of firstOf) for (let k = 0; k < n; k++) out.push(arr[i * n + k]);
-    return out;
-  };
-  positions = new Float32Array(pick(pos, 3));
-  let normals = new Float32Array(pick(nrm, 3));
-  let skinI = pick(si, 4), skinW = pick(sw, 4), region = pick(reg, 1);
-  let indices = new Uint32Array(idx.map((i) => remap[i]));
-  const tris0 = indices.length / 3;
-  // simplify (normals as attributes so silhouettes and shading survive; borders locked to avoid cracks)
-  const [simp, error] = MeshoptSimplifier.simplifyWithAttributes(indices, positions, 3, normals, 3, [0.4, 0.4, 0.4], null, BODY_TRIS * 3, 0.02, ['LockBorder']);
-  indices = simp;
-  const [cremap, n] = MeshoptSimplifier.compactMesh(indices);
-  void cremap;
-  // compactMesh rewrites `indices` in place and returns the old→new remap
-  const P2 = new Float32Array(n * 3), N2 = new Float32Array(n * 3), I2 = new Uint8Array(n * 4), W2 = new Uint8Array(n * 4), R2 = new Uint8Array(n);
-  for (let old = 0; old < cremap.length; old++) {
-    const j = cremap[old];
-    if (j === 0xffffffff) continue;
-    P2.set(positions.subarray(old * 3, old * 3 + 3), j * 3);
-    N2.set(normals.subarray(old * 3, old * 3 + 3), j * 3);
-    // quantize weights to bytes summing to 255
-    const w = skinW.slice(old * 4, old * 4 + 4);
-    const sum = w.reduce((a, b) => a + b, 0) || 1;
-    const q = w.map((x) => Math.round((x / sum) * 255));
-    const d = 255 - q.reduce((a, b) => a + b, 0);
-    q[q.indexOf(Math.max(...q))] += d;
-    for (let k = 0; k < 4; k++) {
-      I2[j * 4 + k] = skinI[old * 4 + k];
-      W2[j * 4 + k] = q[k];
-    }
-    R2[j] = region[old];
-  }
-  normals = N2;
-  const nrm8 = new Int8Array(n * 4);
-  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) nrm8[i * 4 + k] = Math.round(Math.max(-1, Math.min(1, N2[i * 3 + k])) * 127);
-  const index16 = new Uint16Array(indices);
-  if (n > 65535) throw new Error('too many vertices');
-  const box = new THREE.Box3().setFromArray(P2);
-  console.log(`${name}: ${vcount0} → ${n} verts, ${tris0} → ${indices.length / 3} tris (err ${error.toFixed(4)}), bbox ${box.min.toArray().map((x) => x.toFixed(2))} … ${box.max.toArray().map((x) => x.toFixed(2))}`);
-  return { name, rest, vertexCount: n, positions: P2, normals: nrm8, skinIndex: I2, skinWeight: W2, region: R2, index: index16 };
 }
-
-const male = buildBody('male', maleMeshes);
-const female = buildBody('female', femaleMeshes);
+const totalV = parts.reduce((a, p) => a + p.vertexCount, 0), totalT = parts.reduce((a, p) => a + p.index.length / 3, 0);
+console.log(`parts: ${parts.length}, ${totalV} vertices, ${totalT} triangles`);
+for (const pt of parts) console.log(`  ${pt.gender} ${pt.name}${pt.aliases.length ? ' (=' + pt.aliases.join(',') + ')' : ''}: ${pt.vertexCount} v, ${pt.index.length / 3} t`);
 
 // ---------- clips ----------
 const allClips = new Map();
@@ -240,8 +330,8 @@ for (const name of CLIPS) {
     for (let f = 0; f < frames; f++) {
       const t = Math.min(clip.duration, f / FPS);
       if (it) _q.fromArray(it.evaluate(t)).normalize();
-      else _q.fromArray(male.rest.Q, bi * 4);
-      if (bi === 0 && it === null) _q.fromArray(male.rest.Q, 0);
+      else _q.fromArray(ual.Q, bi * 4);
+      if (bi === 0 && it === null) _q.fromArray(ual.Q, 0);
       // keep consecutive frames in the same hemisphere so runtime lerps take the short path
       if (f > 0) {
         _qp.fromArray(rot, ((f - 1) * bones.length + bi) * 4);
@@ -254,7 +344,7 @@ for (const name of CLIPS) {
   const pit = ptr?.createInterpolant();
   for (let f = 0; f < frames; f++) {
     if (pit) pel.set(pit.evaluate(Math.min(clip.duration, f / FPS)), f * 3);
-    else pel.set(male.rest.T.subarray(pelvisIdx * 3, pelvisIdx * 3 + 3), f * 3);
+    else pel.set(ual.T.subarray(pelvisIdx * 3, pelvisIdx * 3 + 3), f * 3);
   }
   clips.push({ name, loop, frames, duration: clip.duration, rot, pel, speed: 0, phase0: 0 });
 }
@@ -266,7 +356,7 @@ function fkFoot(clip, f, footName) {
   for (let i = 0; i < bones.length; i++) {
     _q.fromArray(clip.rot, (f * bones.length + i) * 4);
     if (i === pelvisIdx) _t.fromArray(clip.pel, f * 3);
-    else _t.fromArray(male.rest.T, i * 3);
+    else _t.fromArray(ual.T, i * 3);
     _m[i].compose(_t, _q, _one);
     if (parents[i] >= 0) _m[i].premultiply(_m[parents[i]]);
   }
@@ -308,12 +398,13 @@ function put(typed) {
   off += bytes.byteLength;
   return [at, typed.length];
 }
-function encodeBody(b) {
+function encodeSkeleton(sk) {
+  return { gender: sk.gender, restT: put(sk.T), restQ: put(sk.Q), pelvisOffset: sk.pelvisOffset.map((x) => +x.toFixed(5)), legScale: +sk.legScale.toFixed(4) };
+}
+function encodePart(pt) {
   return {
-    name: b.name, vertexCount: b.vertexCount,
-    restT: put(b.rest.T), restQ: put(b.rest.Q), invBind: put(b.rest.inv),
-    position: put(b.positions), normal: put(b.normals), skinIndex: put(b.skinIndex), skinWeight: put(b.skinWeight),
-    region: put(b.region), index: put(b.index),
+    name: pt.name, aliases: pt.aliases, gender: pt.gender, kind: pt.kind, vertexCount: pt.vertexCount, quant: QS,
+    position: put(pt.position), normal: put(pt.normal), skinIndex: put(pt.skinIndex), skinWeight: put(pt.skinWeight), color: put(pt.color), index: put(pt.index),
   };
 }
 let rawFloats = 0, storedShorts = 0;
@@ -334,23 +425,24 @@ function encodeClip(c) {
   return { name: c.name, loop: c.loop, frames: c.frames, duration: +c.duration.toFixed(4), speed: +c.speed.toFixed(3), phase0: +c.phase0.toFixed(3), constMask: put(constMask), rot: put(new Int16Array(data)), pelvis: put(c.pel) };
 }
 const json = {
-  version: 1, fps: FPS,
-  source: 'Quaternius Universal Animation Library 1+2 (Standard), CC0 1.0',
+  version: 2, fps: FPS,
+  source: 'Quaternius Universal Animation Library 1+2 (Standard) and Ultimate Modular Men / Women, CC0 1.0',
   bones: bones.map((b, i) => ({ name: b.name, parent: parents[i] })),
-  bodies: [encodeBody(male), encodeBody(female)],
+  skeletons: skeletons.map(encodeSkeleton),
+  parts: parts.map(encodePart),
   clips: clips.map(encodeClip),
 };
 console.log(`clips: ${clips.length}, rotation data ${(storedShorts * 2 / 1024).toFixed(0)} KB (raw ${(rawFloats * 4 / 1024).toFixed(0)} KB float)`);
 const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
 const jpad = (4 - (jsonBytes.length % 4)) % 4;
 const head = new Uint8Array(8);
-head.set([0x43, 0x43, 0x52, 0x31]); // "CCR1"
+head.set([0x43, 0x43, 0x52, 0x32]); // "CCR2"
 new DataView(head.buffer).setUint32(4, jsonBytes.length + jpad, true);
-const parts = [head, jsonBytes, new Uint8Array(jpad).fill(0x20), ...chunks];
-const total = parts.reduce((a, p) => a + p.byteLength, 0);
+const out = [head, jsonBytes, new Uint8Array(jpad).fill(0x20), ...chunks];
+const total = out.reduce((a, p) => a + p.byteLength, 0);
 const outBuf = new Uint8Array(total);
 let o = 0;
-for (const p of parts) {
+for (const p of out) {
   outBuf.set(p, o);
   o += p.byteLength;
 }

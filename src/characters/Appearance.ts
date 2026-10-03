@@ -25,6 +25,8 @@ export interface Appearance {
   height: number; // scale ~0.92..1.08
   build: number; // torso width scale ~0.88..1.15
   female: boolean;
+  /** 0..1: picks between equivalent clothing / head parts (crowd variety). */
+  variant?: number;
 }
 
 export const SKIN_TONES = [0xf1c8a5, 0xe0ac85, 0xc68b62, 0xa86d47, 0x8a5434, 0x5f3a24, 0xffdbc0];
@@ -65,9 +67,10 @@ export function randomAppearance(rng: Rng, opts: { female?: boolean; nightlife?:
     bottom: rng.chance(0.25) ? 'shorts' : 'pants',
     tattoo: rng.chance(0.15) ? rng.pick(['tribal', 'sleeve', 'neck'] as const) : 'none',
     tattooColor: 0x1a2a3a,
-    height: female ? rng.range(0.9, 1.0) : rng.range(0.95, 1.07),
+    height: female ? rng.range(0.94, 1.02) : rng.range(0.95, 1.06),
     build: female ? rng.range(0.85, 0.95) : rng.range(0.95, 1.15),
     female,
+    variant: rng.next(),
   };
 }
 
@@ -78,7 +81,7 @@ export function policeAppearance(rng: Rng, swat = false): Appearance {
     shoes: 0x111111, hair: rng.pick(HAIR_COLORS.slice(0, 6)), hairStyle: female ? 'bun' : 'short',
     beard: 'none', hat: swat ? 'helmet' : 'police', hatColor: swat ? 0x15181c : 0x1a2236,
     top: swat ? 'vest' : 'long', bottom: 'pants', tattoo: 'none', tattooColor: 0,
-    height: rng.range(0.97, 1.06), build: swat ? 1.18 : rng.range(1.0, 1.12), female,
+    height: rng.range(0.97, 1.06), build: swat ? 1.18 : rng.range(1.0, 1.12), female, variant: rng.next(),
   };
 }
 

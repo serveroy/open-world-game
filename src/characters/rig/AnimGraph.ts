@@ -1,5 +1,5 @@
 import { computePose, makePose, type ActionAnim, type AnimState, type Pose } from '../Pose';
-import { rotate, type RigClip, type RigData } from './RigData';
+import { rotate, type RigBody, type RigClip, type RigData } from './RigData';
 import { blendClip, blendPoseInto, LocalPose } from './PoseEval';
 import { euler, ProcRetarget } from './ProcPose';
 
@@ -129,6 +129,7 @@ export class AnimLibrary {
 }
 
 const _poseOld: Pose = makePose();
+const _off = new Float32Array(3);
 
 /** Per-character animation state machine + evaluator. */
 export class AnimController {
@@ -148,6 +149,20 @@ export class AnimController {
   private reverse = false;
   /** Lower-body twist (rad) when moving sideways relative to facing. */
   twist = 0;
+  /** Leg length of the animated body relative to the clips' skeleton (stride → ground speed). */
+  legScale = 1;
+  /** Pelvis shift (m) that puts seated clips' hips over the seat anchor, and swim lift to the surface. */
+  seatShift = 0.31;
+  swimLift = 1.16;
+
+  /** Adapt gameplay anchors to a body type's proportions. */
+  fitBody(body: RigBody): void {
+    this.legScale = body.legScale;
+    const q = this.lib.rig.bodies[0]!.restQ;
+    rotate(q[0]!, q[1]!, q[2]!, q[3]!, body.pelvisOffset[0]!, body.pelvisOffset[1]!, body.pelvisOffset[2]!, _off, 0);
+    this.seatShift = 0.31 - _off[2]!;
+    this.swimLift = 1.16 - _off[1]!;
+  }
   /** Model-space FK pre-rotations per bone (null = none). Rebuilt each evaluate. */
   readonly pre: (Float32Array | null)[];
   private readonly preBuf: Float32Array[];
@@ -192,7 +207,7 @@ export class AnimController {
     const walk = lib.clip(this.walkClip()), jog = lib.clip('Jog_Fwd_Loop'), sprint = lib.clip('Sprint_Loop');
     const mv = g[1]! + g[2]! + g[3]!;
     if (mv > 1e-3) {
-      const v = (g[1]! * walk.speed + g[2]! * jog.speed + g[3]! * sprint.speed) / mv;
+      const v = ((g[1]! * walk.speed + g[2]! * jog.speed + g[3]! * sprint.speed) / mv) * this.legScale;
       const f = (g[1]! / walk.duration + g[2]! / jog.duration + g[3]! / sprint.duration) / mv;
       // exact ground-speed match, softened in the slow-walk range (very quick shuffles look odd)
       let r = Math.max(0.05, sp) / v;
@@ -327,7 +342,7 @@ export class AnimController {
       else if (e.key === 'swim') swim += w;
     }
     const f = this.lib.fwd, u = this.lib.up;
-    const dz = 0.31 * Math.min(1, seat), dy = 1.16 * Math.min(1, swim);
+    const dz = this.seatShift * Math.min(1, seat), dy = this.swimLift * Math.min(1, swim);
     if (dz === 0 && dy === 0) return;
     for (let a = 0; a < 3; a++) out.pelvis[a]! += f[a]! * dz + u[a]! * dy;
   }

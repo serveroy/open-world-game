@@ -4,7 +4,8 @@ import type { Appearance } from './Appearance';
 import type { RigData } from './rig/RigData';
 import { LocalPose, ModelPose, boneWorld, forwardKinematics, writeSkin } from './rig/PoseEval';
 import { AnimController, AnimLibrary, type AnimStyle } from './rig/AnimGraph';
-import { HAIR_IDS, HAT_IDS, ITEM_IDS, OUTER_IDS } from './rig/regions';
+import { HAT_IDS, ITEM_IDS } from './rig/regions';
+import { pickParts } from './rig/wardrobe';
 import { SkinnedCrowd, type InstanceLook } from './SkinnedCrowd';
 
 /** Items a character can hold in the right hand. */
@@ -56,6 +57,9 @@ const _pm = new THREE.Matrix4();
 const _o = { x: 0, y: 0, z: 0 };
 const _c = new THREE.Color();
 
+/** Characters within this distance of the camera cast shadows (m). */
+const SHADOW_DIST = 32;
+
 /** Muzzle distance along the barrel per held item (metres from the grip). */
 const MUZZLE: Partial<Record<HeldItem, number>> = { sniper: 0.82, rifle: 0.56, shotgun: 0.56, smg: 0.36 };
 
@@ -73,7 +77,7 @@ export class CharacterRenderer {
   private readonly nb: number;
   private readonly b: Record<'pelvis' | 'chest' | 'head' | 'handR' | 'handL' | 'footR' | 'footL', number>;
   /** Characters posed / drawn last frame (perf overlay). */
-  stats = { posed: 0, drawn: 0 };
+  stats = { posed: 0, drawn: 0, draws: 0 };
 
   constructor(scene: THREE.Scene, readonly capacity: number, castShadow: boolean, readonly rig: RigData, private camera: THREE.Camera) {
     this.crowd = new SkinnedCrowd(scene, rig, capacity, castShadow);
@@ -129,7 +133,7 @@ export class CharacterRenderer {
     const s = this.slots[slot];
     if (!s) return;
     s.used = false;
-    this.crowd.setVisible(slot, false);
+    this.crowd.clear(slot);
   }
 
   get used(): number {
@@ -143,9 +147,12 @@ export class CharacterRenderer {
     s.app = app;
     s.body = app.female ? 1 : 0;
     s.scale = app.height;
-    this.crowd.setBody(slot, s.body);
-    this.crowd.setLook(slot, lookOf(app));
+    const pick = pickParts(app);
+    const r = this.rig;
+    this.crowd.setParts(slot, r.part(s.body, pick.head), r.part(s.body, pick.body), r.part(s.body, pick.legs), r.part(s.body, pick.feet));
+    this.crowd.setLook(slot, lookOf(app, pick.hat));
     s.ctrl.style = { gait: app.top === 'suit' ? 'formal' : 'normal', folded: false };
+    s.ctrl.fitBody(r.bodies[s.body]!);
   }
 
   /** Body-language variety (gait, idle) for a slot. */
@@ -202,7 +209,7 @@ export class CharacterRenderer {
       this.stats.posed++;
     }
     writeSkin(this.rig.bodies[s.body]!, s.model, x, y, z, yaw, sc, this.crowd.poseData, this.crowd.rowOffset(slot));
-    this.crowd.setVisible(slot, true);
+    this.crowd.setVisible(slot, true, (x - cam.x) ** 2 + (z - cam.z) ** 2 < SHADOW_DIST * SHADOW_DIST);
     this.fillJoints(s, held);
   }
 
@@ -229,7 +236,8 @@ export class CharacterRenderer {
       return;
     }
     writeSkin(this.rig.bodies[s.body]!, m, 0, 0, 0, 0, s.scale, this.crowd.poseData, this.crowd.rowOffset(slot));
-    this.crowd.setVisible(slot, true);
+    const cam = this.camera.position;
+    this.crowd.setVisible(slot, true, (s.x - cam.x) ** 2 + (s.z - cam.z) ** 2 < SHADOW_DIST * SHADOW_DIST);
     // joints in world space (identity placement, model positions are world / scale)
     const J = s.joints, b = this.b, sc = s.scale;
     const wp = (bone: number, out: THREE.Vector3, ox = 0, oy = 0, oz = 0): void => {
@@ -284,35 +292,28 @@ export class CharacterRenderer {
       break;
     }
     this.crowd.commit(high);
-    this.stats.drawn = this.crowd.drawn;
+    this.stats.draws = this.crowd.draws;
+    let n = 0;
+    for (let i = 0; i < high; i++) if (this.crowd.isVisible(i)) n++;
+    this.stats.drawn = n;
   }
 }
 
 const hex = (c: number): number => _c.setHex(c).getHex();
 
-/** Appearance → per-instance shader parameters. */
-export function lookOf(app: Appearance): InstanceLook {
-  const covered = app.top === 'long' || app.top === 'jacket' || app.top === 'suit';
-  const hatHidesHair = app.hat === 'helmet' || (app.hat !== 'none' && (app.hairStyle === 'afro' || app.hairStyle === 'mohawk' || app.hairStyle === 'bun'));
-  const hair = hatHidesHair ? (app.hat === 'helmet' ? 'none' : 'short') : app.hairStyle;
-  const tattoo = { none: 0, tribal: 1, sleeve: 2, neck: 3, full: 4 }[app.tattoo];
-  const flags = (app.beard === 'stubble' ? 1 : 0) | (hair !== 'none' ? 2 : 0) | (hair === 'mohawk' ? 4 : 0) | (tattoo << 3);
+/** Appearance → per-instance tint / extras. */
+export function lookOf(app: Appearance, hat: Appearance['hat']): InstanceLook {
   return {
     skin: hex(app.skin),
     hair: hex(app.hair),
-    top: hex(app.top === 'suit' ? 0xeeeae2 : app.shirt),
-    outer: hex(app.top === 'vest' ? 0x2a2e34 : app.jacket),
-    bottom: hex(app.top === 'suit' ? app.jacket : app.pants),
+    top1: hex(app.shirt),
+    top2: hex(app.top === 'vest' ? 0x2a2e34 : app.jacket),
+    bottom: hex(app.pants),
     shoes: hex(app.shoes),
     hat: hex(app.hatColor),
     tattoo: hex(app.tattooColor || 0x1a2a3a),
-    sleeve: app.top === 'tank' || app.top === 'vest' ? 0 : covered ? 1.02 : 0.36,
-    legs: app.bottom === 'shorts' ? 0.42 : 1.02,
-    outerId: app.top === 'jacket' || app.top === 'suit' ? OUTER_IDS.jacket : app.top === 'vest' ? OUTER_IDS.vest : OUTER_IDS.none,
-    hairId: HAIR_IDS[hair],
-    beardId: app.beard === 'full' ? 1 : app.beard === 'goatee' ? 2 : 0,
-    hatId: HAT_IDS[app.hat],
-    topKind: { tee: 0, long: 1, tank: 2, jacket: 3, suit: 4, vest: 5 }[app.top],
-    flags,
+    hatId: HAT_IDS[hat],
+    tattooKind: { none: 0, tribal: 1, sleeve: 2, neck: 3, full: 4 }[app.tattoo],
+    beard: app.female ? 0 : { none: 0, stubble: 1, goatee: 2, full: 3 }[app.beard],
   };
 }

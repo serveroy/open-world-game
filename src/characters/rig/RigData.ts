@@ -3,9 +3,9 @@
  * Universal Animation Library). Pure data — no three.js — so the animation code is unit-testable.
  */
 
+/** Skeleton rest pose for one body type (gender): UAL rotations with the dressed model's joint positions. */
 export interface RigBody {
   name: string;
-  vertexCount: number;
   /** Rest local translation / rotation per bone (bind pose). */
   restT: Float32Array;
   restQ: Float32Array;
@@ -14,12 +14,36 @@ export interface RigBody {
   bindP: Float32Array;
   invQ: Float32Array;
   invP: Float32Array;
-  position: Float32Array;
+  /** Added to clip pelvis translations (clips were authored on a different skeleton). */
+  pelvisOffset: Float32Array;
+  /** Leg length relative to the animation skeleton (scales gait ground speed). */
+  legScale: number;
+}
+
+/** One dressed part (head / body / legs / feet) skinned to a body type's skeleton. */
+export interface RigPart {
+  name: string;
+  aliases: string[];
+  /** Body (skeleton) index: 0 male, 1 female. */
+  body: number;
+  kind: PartKind;
+  vertexCount: number;
+  /** int16 xyz_ ; metres = value / quant. */
+  position: Int16Array;
+  quant: number;
   normal: Int8Array; // xyz_ snorm
   skinIndex: Uint8Array;
   skinWeight: Uint8Array; // sums to 255
-  region: Uint8Array;
+  /** sRGB colour + paint slot per vertex. */
+  color: Uint8Array;
   index: Uint16Array;
+}
+
+export const enum PartKind {
+  Head = 0,
+  Body = 1,
+  Legs = 2,
+  Feet = 3,
 }
 
 export interface RigClip {
@@ -42,6 +66,9 @@ export interface RigData {
   boneNames: string[];
   parents: Int16Array;
   bodies: RigBody[];
+  parts: RigPart[];
+  /** Part index by name (including aliases of identical parts), per body. */
+  part(body: number, name: string): number;
   clips: RigClip[];
   clipIndex: Map<string, number>;
   /** Index of the pelvis bone (the only bone with animated translation). */
@@ -53,10 +80,12 @@ interface Ref {
   0: number;
   1: number;
 }
-interface JsonBody {
-  name: string;
-  vertexCount: number;
-  restT: Ref; restQ: Ref; invBind: Ref; position: Ref; normal: Ref; skinIndex: Ref; skinWeight: Ref; region: Ref; index: Ref;
+interface JsonSkeleton {
+  gender: string; restT: Ref; restQ: Ref; pelvisOffset: number[]; legScale: number;
+}
+interface JsonPart {
+  name: string; aliases: string[]; gender: string; kind: number; vertexCount: number; quant: number;
+  position: Ref; normal: Ref; skinIndex: Ref; skinWeight: Ref; color: Ref; index: Ref;
 }
 interface JsonClip {
   name: string; loop: boolean; frames: number; duration: number; speed: number; phase0?: number; constMask: Ref; rot: Ref; pelvis: Ref;
@@ -65,14 +94,15 @@ interface JsonRig {
   version: number;
   fps: number;
   bones: { name: string; parent: number }[];
-  bodies: JsonBody[];
+  skeletons: JsonSkeleton[];
+  parts: JsonPart[];
   clips: JsonClip[];
 }
 
 export function decodeRig(buf: ArrayBuffer): RigData {
   const dv = new DataView(buf);
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== 'CCR1') throw new Error('chars.bin: bad magic');
+  if (magic !== 'CCR2') throw new Error('chars.bin: bad magic');
   const jlen = dv.getUint32(4, true);
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jlen))) as JsonRig;
   const blob = 8 + jlen;
@@ -85,7 +115,7 @@ export function decodeRig(buf: ArrayBuffer): RigData {
   const parents = new Int16Array(json.bones.map((b) => b.parent));
   const boneNames = json.bones.map((b) => b.name);
 
-  const bodies = json.bodies.map((b): RigBody => {
+  const bodies = json.skeletons.map((b): RigBody => {
     const restT = f32(b.restT), restQ = f32(b.restQ);
     const bindQ = new Float32Array(nb * 4), bindP = new Float32Array(nb * 3);
     fkRest(parents, restT, restQ, bindQ, bindP);
@@ -96,11 +126,16 @@ export function decodeRig(buf: ArrayBuffer): RigData {
       invQ[i * 4] = qx; invQ[i * 4 + 1] = qy; invQ[i * 4 + 2] = qz; invQ[i * 4 + 3] = qw;
       rotate(qx, qy, qz, qw, -bindP[i * 3]!, -bindP[i * 3 + 1]!, -bindP[i * 3 + 2]!, invP, i * 3);
     }
-    return {
-      name: b.name, vertexCount: b.vertexCount, restT, restQ, bindQ, bindP, invQ, invP,
-      position: f32(b.position), normal: i8(b.normal), skinIndex: u8(b.skinIndex), skinWeight: u8(b.skinWeight),
-      region: u8(b.region), index: u16(b.index),
-    };
+    return { name: b.gender, restT, restQ, bindQ, bindP, invQ, invP, pelvisOffset: new Float32Array(b.pelvisOffset), legScale: b.legScale };
+  });
+  const bodyOf = (g: string): number => Math.max(0, json.skeletons.findIndex((k) => k.gender === g));
+  const parts = json.parts.map((p): RigPart => ({
+    name: p.name, aliases: p.aliases, body: bodyOf(p.gender), kind: p.kind as PartKind, vertexCount: p.vertexCount, quant: p.quant,
+    position: i16(p.position), normal: i8(p.normal), skinIndex: u8(p.skinIndex), skinWeight: u8(p.skinWeight), color: u8(p.color), index: u16(p.index),
+  }));
+  const partMap = new Map<string, number>();
+  parts.forEach((p, i) => {
+    for (const n of [p.name, ...p.aliases]) partMap.set(`${p.body}:${n}`, i);
   });
 
   const clips = json.clips.map((c): RigClip => {
@@ -129,7 +164,12 @@ export function decodeRig(buf: ArrayBuffer): RigData {
   const clipIndex = new Map(clips.map((c, i) => [c.name, i]));
   const boneMap = new Map(boneNames.map((n, i) => [n, i]));
   return {
-    fps: json.fps, boneNames, parents, bodies, clips, clipIndex, pelvis: boneMap.get('pelvis') ?? 1,
+    fps: json.fps, boneNames, parents, bodies, parts, clips, clipIndex, pelvis: boneMap.get('pelvis') ?? 1,
+    part(body: number, name: string): number {
+      const i = partMap.get(`${body}:${name}`);
+      if (i === undefined) throw new Error(`no part ${name} for body ${body}`);
+      return i;
+    },
     bone(name: string): number {
       const i = boneMap.get(name);
       if (i === undefined) throw new Error('no bone ' + name);

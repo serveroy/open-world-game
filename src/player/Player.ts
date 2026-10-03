@@ -170,8 +170,8 @@ export class Player {
       this.sprinting = intent.sprint && mag > 0.3 && !this.crouching && intent.faceYaw === null && this.vitals.stamina > 0;
       if (this.sprinting) this.vitals.useStamina(13 * dt);
       this.running = mag > (this.running ? RUN_OFF : RUN_ON);
-      const walk = WALK * Math.min(1, mag / 0.3);
-      const base = this.crouching ? WALK * 0.9 * Math.min(1, mag / 0.3) : intent.faceYaw !== null ? RUN * 0.62 : this.running ? RUN : walk;
+      const walk = WALK * Math.min(1, mag / 0.18);
+      const base = this.crouching ? WALK * 0.9 * Math.min(1, mag / 0.18) : intent.faceYaw !== null ? RUN * 0.62 : this.running ? RUN : walk;
       speed = this.sprinting ? SPRINT : base;
     }
     speed *= this.speedScale;

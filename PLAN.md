@@ -442,9 +442,10 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
   - The lower-body strafe twist only applies while aiming.
   - The mocap jog was airborne about 92% of its cycle with a 24 cm bounce, which looked like skipping. The rise above its lowest point is cut to 40% (sprint 60%, `BOUNCE`).
   - Lowering the body alone made the push-off toe scrape forward along the floor for about 0.1 s per step. `runFit` now precomputes, per body type and run frame, a pelvis curve and a lift per ankle. Two-bone leg IK (`rig/LegIK.ts`, applied in `AnimController.groundFix`) puts a foot sweeping back at ground speed onto the floor and keeps a pushing-off or swinging foot 3 cm clear.
-  - A ground lock then lifts the body by any remaining dip, since the dressed legs are longer than the clips' skeleton.
+  - The ground lock (dressed legs are longer than the clips' skeleton) raises a foot that would still dip below the floor by bending that knee. It used to lift the whole body, which jolted the walk upward at every heel strike (vertical acceleration spikes of 17 m/s², versus about 6 from the clip itself).
   - Result: jog bob 10 cm (sprint 8 cm), planted feet move at about 98% of ground speed, and toes never sink.
-  - On foot, the stick has two gaits instead of a speed ramp: a light push walks at 1.4 m/s, a push past about 2/3 runs at 4.6 m/s (with hysteresis), and full forward sprints. Keyboard: hold Alt to walk. The old ramp passed through a slow-jog band that read as "running slowly".
+  - On foot, the stick has two gaits instead of a speed ramp: a light push walks at 1.4 m/s, a push past about 2/3 runs at 4.6 m/s (with hysteresis), and full forward sprints. Keyboard: hold Alt to walk. Nearly any walk-range push gives the full walk (a slower walk played the cycle in slow motion).
+  - Taxi fares and other seated passengers (`Ped.riding`) are excluded from vehicle-vs-pedestrian hits. The cab used to "run over" its own passenger (they sit at the cab's position) once it passed 2.5 m/s, which was a witnessed hit-and-run and a wanted star. The old ramp passed through a slow-jog band that read as "running slowly".
   - Actions with no clip (hands up, cower, kick, lockpick, wave, bike) retarget the old procedural `Pose` onto the skeleton (`ProcPose`).
   - The ragdoll is now 11 bodies on real bones, with hinge-limited elbows and knees.
   - `__game.lineup()` shows a QA row of animated characters.

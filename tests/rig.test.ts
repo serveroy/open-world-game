@@ -249,6 +249,29 @@ describe('animation graph', () => {
     }
   });
 
+  it('walks without jolts: the ground lock bends a knee instead of popping the body up', () => {
+    const st = makeAnimState();
+    st.speed = 1.4;
+    const c = new AnimController(lib);
+    c.fitBody(male);
+    run(st, 1, c);
+    const lp = new LocalPose(nb), m = new ModelPose(nb);
+    const ys: number[] = [];
+    let sink = 0;
+    for (let i = 0; i < 240; i++) {
+      c.update(st, 1 / 60);
+      c.evaluate(st, lp);
+      forwardKinematics(rig, male, lp, m, c.pre);
+      c.groundFix(m);
+      ys.push(at(m, 'pelvis').y);
+      for (const b of ['ball_l', 'ball_r', 'foot_l', 'foot_r']) sink = Math.min(sink, at(m, b).y - male.bindP[rig.bone(b) * 3 + 1]!);
+    }
+    let peak = 0;
+    for (let i = 2; i < ys.length; i++) peak = Math.max(peak, Math.abs(ys[i]! - 2 * ys[i - 1]! + ys[i - 2]!) * 3600);
+    expect(peak).toBeLessThan(10); // m/s² vertical; the old body lift spiked to ~17
+    expect(sink).toBeGreaterThan(-0.02);
+  });
+
   it('procedural fallback actions evaluate to finite poses', () => {
     const st = makeAnimState();
     for (const a of ['handsup', 'cower', 'kick', 'lockpick', 'wave', 'pulled', 'vault'] as const) {

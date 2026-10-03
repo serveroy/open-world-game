@@ -233,21 +233,20 @@ export class AnimController {
 
   /**
    * Leg IK + ground lock (after FK): run cycles move each ankle by its precomputed lift (planted
-   * feet onto the floor, lifting feet clear of it); then, since the dressed bodies' legs are longer
-   * than the clips' skeleton, lift the whole body by the deepest remaining dip below the floor.
+   * feet onto the floor, lifting feet clear of it). Then, since the dressed bodies' legs are longer
+   * than the clips' skeleton, a foot that would still dip below the floor is raised by bending its
+   * knee. (Lifting the whole body instead jolted it upward at every heel strike.)
    */
   groundFix(model: ModelPose): void {
     if (!this.groundLock || !this.feet.length) return;
-    const L = this.legs;
-    if (this.lift[0] !== 0) liftFoot(model, L[0]!, L[1]!, L[2]!, L[3]!, this.lift[0]!);
-    if (this.lift[1] !== 0) liftFoot(model, L[4]!, L[5]!, L[6]!, L[7]!, this.lift[1]!);
-    let lift = 0;
-    for (let k = 0; k < this.feet.length; k++) {
-      const y = model.p[this.feet[k]! * 3 + 1]!;
-      lift = Math.max(lift, this.feetRest[k]! - 0.012 - y);
+    const L = this.legs, F = this.feet, R = this.feetRest, P = model.p;
+    for (let k = 0; k < 2; k++) {
+      const o = k * 4;
+      if (this.lift[k] !== 0) liftFoot(model, L[o]!, L[o + 1]!, L[o + 2]!, L[o + 3]!, this.lift[k]!);
+      // feet = [ball_l, ball_r, foot_l, foot_r]
+      const dip = Math.max(R[k]! - 0.012 - P[F[k]! * 3 + 1]!, R[k + 2]! - 0.012 - P[F[k + 2]! * 3 + 1]!);
+      if (dip > 0) liftFoot(model, L[o]!, L[o + 1]!, L[o + 2]!, L[o + 3]!, dip);
     }
-    if (lift <= 0) return;
-    for (let i = 1; i < model.p.length; i += 3) model.p[i]! += lift;
   }
   /** Per-side ankle lift (m) for the leg IK, set by evaluate() from the run cycles. */
   private readonly lift = new Float32Array(2);

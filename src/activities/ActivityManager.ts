@@ -164,6 +164,7 @@ export class ActivityManager implements System {
   /** Seat a ped as a passenger of `v` (rendered seated each frame). */
   seat(p: Ped, v: Vehicle): void {
     this.passengers.set(p, v);
+    p.riding = v;
     p.setState('scripted');
     p.setCollision(false);
     v.passengers.push({ kind: 'ped', ref: p });
@@ -173,6 +174,7 @@ export class ActivityManager implements System {
     const v = this.passengers.get(p);
     if (!v) return;
     this.passengers.delete(p);
+    p.riding = null;
     v.passengers = v.passengers.filter((o) => o.ref !== p);
     v.toWorld(v.info.door2, _v);
     const gy = this.game.world ? Math.max(this.game.world.groundY(_v.x, _v.z), 0) : 0;

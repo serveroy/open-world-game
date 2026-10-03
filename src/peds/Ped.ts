@@ -47,6 +47,8 @@ export class Ped {
   readonly threat = new THREE.Vector3();
   partner: Ped | null = null;
   vehicle: Vehicle | null = null;
+  /** Vehicle this ped rides in as a passenger (taxi fare, escort); excluded from vehicle hits. */
+  riding: Vehicle | null = null;
   groundY = 0;
   groundTimer = 0;
   wallTimer = 0;

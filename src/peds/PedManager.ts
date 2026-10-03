@@ -103,7 +103,7 @@ export class PedManager implements System {
     out.length = 0;
     for (const b of base) out.push(b);
     for (const p of this.peds) {
-      if (p.state === 'driving' || p.state === 'dead' || p.state === 'pulled' || p.state === 'enterCar') continue;
+      if (p.riding || p.state === 'driving' || p.state === 'dead' || p.state === 'pulled' || p.state === 'enterCar') continue;
       out.push({ x: p.pos.x, y: p.pos.y + 0.9, z: p.pos.z, radius: 0.32, ref: p });
     }
     return out;
@@ -375,7 +375,7 @@ export class PedManager implements System {
   }
 
   hitByVehicle(p: Ped, v: Vehicle, speed: number): void {
-    if (!p.alive || p.state === 'driving' || p.actionT > 0 && p.anim.action === 'fall') return;
+    if (!p.alive || p.riding || p.state === 'driving' || p.actionT > 0 && p.anim.action === 'fall') return;
     const lv = v.body.linvel();
     p.vel.set(lv.x * 0.7 + (p.pos.x - v.position.x) * 1.5, 0, lv.z * 0.7 + (p.pos.z - v.position.z) * 1.5);
     const byPlayer = v.driver?.kind === 'player';

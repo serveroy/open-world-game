@@ -220,6 +220,35 @@ describe('animation graph', () => {
     }
   });
 
+  it('runs bob like a jog, not a skip, and both body types keep planted feet on the floor', () => {
+    for (const body of rig.bodies) {
+      for (const speed of [4.6, 7.2]) {
+        const st = makeAnimState();
+        st.speed = speed;
+        const c = new AnimController(lib);
+        c.fitBody(body);
+        run(st, 1, c);
+        const lp = new LocalPose(nb), m = new ModelPose(nb);
+        let lo = Infinity, hi = -Infinity, air = 0, sink = 0;
+        for (let i = 0; i < 240; i++) {
+          c.update(st, 1 / 120);
+          c.evaluate(st, lp);
+          forwardKinematics(rig, body, lp, m, c.pre);
+          c.groundFix(m);
+          const y = at(m, 'pelvis').y;
+          lo = Math.min(lo, y);
+          hi = Math.max(hi, y);
+          const feet = ['ball_l', 'ball_r', 'foot_l', 'foot_r'].map((b) => at(m, b).y - body.bindP[rig.bone(b) * 3 + 1]!);
+          if (Math.min(...feet) > 0.01) air++;
+          sink = Math.min(sink, ...feet);
+        }
+        expect(hi - lo).toBeLessThan(0.12);
+        expect(air / 240).toBeLessThan(0.6);
+        expect(sink).toBeGreaterThan(-0.02);
+      }
+    }
+  });
+
   it('procedural fallback actions evaluate to finite poses', () => {
     const st = makeAnimState();
     for (const a of ['handsup', 'cower', 'kick', 'lockpick', 'wave', 'pulled', 'vault'] as const) {

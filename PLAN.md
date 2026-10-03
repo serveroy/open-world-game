@@ -440,7 +440,11 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
   - `AnimGraph` maps `AnimState` to clip layers: speed-matched gait blending, full-body and upper-body cross-fades, and FK overrides for strafing twist and lean.
   - The mocap jog and sprint have leaping strides (their feet imply about 6 and 9 m/s). Their leg swing is pulled about 30% toward each cycle's average leg pose (`STRIDE`) and the cycles are pinned to 3.9 and 6.9 m/s (`GAIT_SPEED`), so runs keep a natural cadence with planted feet.
   - The lower-body strafe twist only applies while aiming.
-  - The mocap jog was airborne about 92% of its cycle with a 24 cm bounce, which looked like skipping. The rise above its lowest point is cut to 40% (sprint 60%, `BOUNCE`). A ground lock (`AnimController.groundFix`) lifts the body when a foot would dip below the floor, since the dressed legs are longer than the clips' skeleton. Result: each foot is down about 45% of the jog cycle and the body is airborne about 10% of it.
+  - The mocap jog was airborne about 92% of its cycle with a 24 cm bounce, which looked like skipping. The rise above its lowest point is cut to 40% (sprint 60%, `BOUNCE`).
+  - Lowering the body alone made the push-off toe scrape forward along the floor for about 0.1 s per step. `runFit` now precomputes, per body type and run frame, a pelvis curve and a lift per ankle. Two-bone leg IK (`rig/LegIK.ts`, applied in `AnimController.groundFix`) puts a foot sweeping back at ground speed onto the floor and keeps a pushing-off or swinging foot 3 cm clear.
+  - A ground lock then lifts the body by any remaining dip, since the dressed legs are longer than the clips' skeleton.
+  - Result: jog bob 10 cm (sprint 8 cm), planted feet move at about 98% of ground speed, and toes never sink.
+  - On foot, the stick has two gaits instead of a speed ramp: a light push walks at 1.4 m/s, a push past about 2/3 runs at 4.6 m/s (with hysteresis), and full forward sprints. Keyboard: hold Alt to walk. The old ramp passed through a slow-jog band that read as "running slowly".
   - Actions with no clip (hands up, cower, kick, lockpick, wave, bike) retarget the old procedural `Pose` onto the skeleton (`ProcPose`).
   - The ragdoll is now 11 bodies on real bones, with hinge-limited elbows and knees.
   - `__game.lineup()` shows a QA row of animated characters.

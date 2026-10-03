@@ -1,6 +1,7 @@
 import { computePose, makePose, type ActionAnim, type AnimState, type Pose } from '../Pose';
 import { rotate, type RigBody, type RigClip, type RigData } from './RigData';
-import { blendClip, blendPoseInto, LocalPose, type ModelPose } from './PoseEval';
+import { blendClip, blendPoseInto, forwardKinematics, LocalPose, ModelPose } from './PoseEval';
+import { liftFoot } from './LegIK';
 import { euler, ProcRetarget } from './ProcPose';
 
 /**
@@ -101,10 +102,12 @@ const gaitSpeed = (c: RigClip): number => GAIT_SPEED[c.name] ?? c.speed;
 const STRIDE: Record<string, number> = { Jog_Fwd_Loop: 0.36, Sprint_Loop: 0.26 };
 /**
  * Bounce kept (0..1) of the runs' pelvis rise above its lowest point. The mocap jog spends ~90% of
- * its cycle airborne with a 24 cm bounce, which reads as skipping; flattening the rise keeps the
- * feet on the ground for much longer while contact frames stay exactly where they were.
+ * its cycle airborne with a 24 cm bounce, which reads as skipping. The pelvis is flattened and leg
+ * IK keeps planted feet on the floor and lifting / swinging feet clear of it (see runFit).
  */
 export const BOUNCE: Record<string, number> = { Jog_Fwd_Loop: 0.4, Sprint_Loop: 0.6 };
+/** Toe/heel clearance (m) the leg IK keeps under a foot that is pushing off or swinging. */
+const SWING_CLEAR = 0.03;
 
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -119,8 +122,8 @@ export class AnimLibrary {
   /** Leg bones and each run cycle's average leg pose (see STRIDE). */
   readonly legBones: number[];
   readonly legMean = new Map<string, Float32Array>();
-  /** Lowest pelvis height (along model up) of each bounce-flattened run cycle. */
-  readonly pelvisMin = new Map<string, number>();
+  /** Per body type, each run cycle's per-frame pelvis correction and foot lifts (see runFit). */
+  readonly runFit: Map<string, RunFit>[] = [];
   /** Model-space +Z (forward) and +Y (up) expressed in the root bone's local frame (pelvis offsets). */
   readonly fwd = new Float32Array(3);
   readonly up = new Float32Array(3);
@@ -167,13 +170,13 @@ export class AnimLibrary {
       }
       this.legMean.set(name, mean);
     }
-    for (const name of Object.keys(BOUNCE)) {
-      const ci = rig.clipIndex.get(name);
-      if (ci === undefined) continue;
-      const c = rig.clips[ci]!;
-      let mn = Infinity;
-      for (let f = 0; f < c.frames; f++) mn = Math.min(mn, c.pelvis[f * 3]! * this.up[0]! + c.pelvis[f * 3 + 1]! * this.up[1]! + c.pelvis[f * 3 + 2]! * this.up[2]!);
-      this.pelvisMin.set(name, mn);
+    for (const body of rig.bodies) {
+      const m = new Map<string, RunFit>();
+      for (const name of Object.keys(BOUNCE)) {
+        const ci = rig.clipIndex.get(name);
+        if (ci !== undefined) m.set(name, runFit(this, body, rig.clips[ci]!));
+      }
+      this.runFit.push(m);
     }
     rig.clips.forEach((cl, i) => (this.c[cl.name] = i));
   }
@@ -205,6 +208,7 @@ export class AnimController {
   twist = 0;
   /** Leg length of the animated body relative to the clips' skeleton (stride → ground speed). */
   legScale = 1;
+  private bodyIx = 0;
   /** Pelvis shift (m) that puts seated clips' hips over the seat anchor, and swim lift to the surface. */
   seatShift = 0.31;
   swimLift = 1.16;
@@ -212,6 +216,7 @@ export class AnimController {
   /** Adapt gameplay anchors to a body type's proportions. */
   fitBody(body: RigBody): void {
     this.legScale = body.legScale;
+    this.bodyIx = Math.max(0, this.lib.rig.bodies.indexOf(body));
     const q = this.lib.rig.bodies[0]!.restQ;
     rotate(q[0]!, q[1]!, q[2]!, q[3]!, body.pelvisOffset[0]!, body.pelvisOffset[1]!, body.pelvisOffset[2]!, _off, 0);
     this.seatShift = 0.31 - _off[2]!;
@@ -227,11 +232,15 @@ export class AnimController {
   private groundLock = false;
 
   /**
-   * Ground lock (after FK): the dressed bodies' legs are longer than the clips' skeleton, so in deep
-   * stance frames a foot can dip below the floor. Lift the whole body by the deepest dip.
+   * Leg IK + ground lock (after FK): run cycles move each ankle by its precomputed lift (planted
+   * feet onto the floor, lifting feet clear of it); then, since the dressed bodies' legs are longer
+   * than the clips' skeleton, lift the whole body by the deepest remaining dip below the floor.
    */
   groundFix(model: ModelPose): void {
     if (!this.groundLock || !this.feet.length) return;
+    const L = this.legs;
+    if (this.lift[0] !== 0) liftFoot(model, L[0]!, L[1]!, L[2]!, L[3]!, this.lift[0]!);
+    if (this.lift[1] !== 0) liftFoot(model, L[4]!, L[5]!, L[6]!, L[7]!, this.lift[1]!);
     let lift = 0;
     for (let k = 0; k < this.feet.length; k++) {
       const y = model.p[this.feet[k]! * 3 + 1]!;
@@ -240,6 +249,9 @@ export class AnimController {
     if (lift <= 0) return;
     for (let i = 1; i < model.p.length; i += 3) model.p[i]! += lift;
   }
+  /** Per-side ankle lift (m) for the leg IK, set by evaluate() from the run cycles. */
+  private readonly lift = new Float32Array(2);
+  private readonly legs: number[];
   /** Model-space FK pre-rotations per bone (null = none). Rebuilt each evaluate. */
   readonly pre: (Float32Array | null)[];
   private readonly preBuf: Float32Array[];
@@ -260,6 +272,7 @@ export class AnimController {
     this.bPelvis = rig.pelvis;
     this.bHead = rig.bone('Head');
     this.bNeck = rig.bone('neck_01');
+    this.legs = ['thigh_l', 'calf_l', 'foot_l', 'ball_l', 'thigh_r', 'calf_r', 'foot_r', 'ball_r'].map((n) => rig.bone(n));
     this.phase = Math.random();
   }
 
@@ -476,34 +489,23 @@ export class AnimController {
       acc += w;
       blendClip(rig, c, gaitTime(c, this.phase), w / acc, out);
     }
-    // flatten the runs' bounce (weighted by how much of the pose is a run)
+    // runs: flattened pelvis (+ foot lifts for the leg IK in groundFix), shortened strides
+    const fits = lib.runFit[this.bodyIx];
+    this.lift[0] = this.lift[1] = 0;
     for (const [w, c] of gaits) {
-      const keep = BOUNCE[c.name];
-      const mn = lib.pelvisMin.get(c.name);
-      if (keep === undefined || mn === undefined || w <= 0.001) continue;
-      const a = (w / Math.max(acc, 1e-3)) * (1 - keep);
+      const fit = fits?.get(c.name);
+      if (!fit || w <= 0.001) continue;
+      const wn = w / Math.max(acc, 1e-3);
+      let fp = (gaitTime(c, this.phase) * rig.fps) % c.frames;
+      if (fp < 0) fp += c.frames;
+      const f0 = Math.floor(fp), f1 = f0 + 1 >= c.frames ? 0 : f0 + 1, t = fp - f0;
+      const d = sampleAt(fit.pelvis, f0, f1, t) * wn;
       const u = lib.up, P = out.pelvis;
-      const h = P[0]! * u[0]! + P[1]! * u[1]! + P[2]! * u[2]!;
-      const d = Math.max(0, h - mn) * a;
-      P[0]! -= u[0]! * d; P[1]! -= u[1]! * d; P[2]! -= u[2]! * d;
-    }
-    // shorten the run strides (weighted by how much of the pose is a run)
-    for (const [w, c] of gaits) {
+      P[0]! += u[0]! * d; P[1]! += u[1]! * d; P[2]! += u[2]! * d;
+      this.lift[0]! += sampleAt(fit.lift[0], f0, f1, t) * wn;
+      this.lift[1]! += sampleAt(fit.lift[1], f0, f1, t) * wn;
       const k = STRIDE[c.name];
-      const mean = k ? lib.legMean.get(c.name) : undefined;
-      if (!mean || w <= 0.001) continue;
-      const a = (k! * w) / Math.max(acc, 1e-3);
-      const q = out.q;
-      for (const b of lib.legBones) {
-        const j = b * 4;
-        let mx = mean[j]!, my = mean[j + 1]!, mz = mean[j + 2]!, mw = mean[j + 3]!;
-        if (q[j]! * mx + q[j + 1]! * my + q[j + 2]! * mz + q[j + 3]! * mw < 0) {
-          mx = -mx; my = -my; mz = -mz; mw = -mw;
-        }
-        const x = q[j]! + (mx - q[j]!) * a, y = q[j + 1]! + (my - q[j + 1]!) * a, z = q[j + 2]! + (mz - q[j + 2]!) * a, ww = q[j + 3]! + (mw - q[j + 3]!) * a;
-        const l = 1 / Math.sqrt(x * x + y * y + z * z + ww * ww);
-        q[j] = x * l; q[j + 1] = y * l; q[j + 2] = z * l; q[j + 3] = ww * l;
-      }
+      if (k) shortenStride(lib, c.name, k * wn, out.q);
     }
     if (s.crouch > 0.01) {
       const ci = lib.clip('Crouch_Idle_Loop'), cf = lib.clip('Crouch_Fwd_Loop');
@@ -542,6 +544,85 @@ export class AnimController {
     }
     void this.bNeck;
   }
+}
+
+const sampleAt = (a: Float32Array, f0: number, f1: number, t: number): number => a[f0]! + (a[f1]! - a[f0]!) * t;
+
+/** Pull the leg rotations in `q` a fraction `a` toward a run cycle's average leg pose (see STRIDE). */
+function shortenStride(lib: AnimLibrary, clip: string, a: number, q: Float32Array): void {
+  const mean = lib.legMean.get(clip);
+  if (!mean || a <= 0) return;
+  for (const b of lib.legBones) {
+    const j = b * 4;
+    let mx = mean[j]!, my = mean[j + 1]!, mz = mean[j + 2]!, mw = mean[j + 3]!;
+    if (q[j]! * mx + q[j + 1]! * my + q[j + 2]! * mz + q[j + 3]! * mw < 0) {
+      mx = -mx; my = -my; mz = -mz; mw = -mw;
+    }
+    const x = q[j]! + (mx - q[j]!) * a, y = q[j + 1]! + (my - q[j + 1]!) * a, z = q[j + 2]! + (mz - q[j + 2]!) * a, ww = q[j + 3]! + (mw - q[j + 3]!) * a;
+    const l = 1 / Math.sqrt(x * x + y * y + z * z + ww * ww);
+    q[j] = x * l; q[j + 1] = y * l; q[j + 2] = z * l; q[j + 3] = ww * l;
+  }
+}
+
+/** A run cycle's per-frame pelvis correction (m, along model up) and per-side ankle lifts (m). */
+export interface RunFit {
+  pelvis: Float32Array;
+  lift: [Float32Array, Float32Array];
+}
+
+/**
+ * Fit a run cycle to one body type, measured on the stride-shortened cycle. The pelvis keeps only
+ * BOUNCE of its rise; a foot counts as planted while it sweeps backward at about the cycle's ground
+ * speed and is then lifted/lowered exactly onto the floor, otherwise it keeps SWING_CLEAR above it.
+ */
+function runFit(lib: AnimLibrary, body: RigBody, c: RigClip): RunFit {
+  const rig = lib.rig, nb = rig.boneNames.length, n = c.frames, u = lib.up;
+  const sides = [['ball_l', 'foot_l'], ['ball_r', 'foot_r']].map((p) => p.map((b) => rig.bone(b)));
+  const lp = new LocalPose(nb), mp = new ModelPose(nb);
+  const h = new Float32Array(n), low = sides.map(() => new Float32Array(n)), z = sides.map(() => new Float32Array(n));
+  for (let f = 0; f < n; f++) {
+    h[f] = c.pelvis[f * 3]! * u[0]! + c.pelvis[f * 3 + 1]! * u[1]! + c.pelvis[f * 3 + 2]! * u[2]!;
+    blendClip(rig, c, f / rig.fps, 1, lp);
+    shortenStride(lib, c.name, STRIDE[c.name] ?? 0, lp.q);
+    forwardKinematics(rig, body, lp, mp);
+    sides.forEach((bones, k) => {
+      let lo = Infinity, zz = 0;
+      for (const b of bones) {
+        lo = Math.min(lo, mp.p[b * 3 + 1]! - (body.bindP[b * 3 + 1]! - 0.012));
+        zz += mp.p[b * 3 + 2]! / bones.length;
+      }
+      low[k]![f] = lo;
+      z[k]![f] = zz;
+    });
+  }
+  const ground = gaitSpeed(c) * body.legScale, keep = BOUNCE[c.name] ?? 1, mn = Math.min(...h);
+  const planted = sides.map((_, k) => {
+    const zs = z[k]!, e = new Float32Array(n);
+    for (let f = 0; f < n; f++) e[f] = smooth(0.45, 0.8, ((zs[(f + n - 1) % n]! - zs[(f + 1) % n]!) * rig.fps) / 2 / ground);
+    return e;
+  });
+  // pelvis: flattened rise, offset so planted feet sit on the floor on average
+  const pelvis = new Float32Array(n);
+  let sum = 0, wsum = 0;
+  for (let f = 0; f < n; f++) {
+    pelvis[f] = -(h[f]! - mn) * (1 - keep);
+    for (let k = 0; k < sides.length; k++) {
+      sum += -(low[k]![f]! + pelvis[f]!) * planted[k]![f]!;
+      wsum += planted[k]![f]!;
+    }
+  }
+  const base = wsum > 0 ? sum / wsum : 0;
+  for (let f = 0; f < n; f++) pelvis[f]! += base;
+  const lift = sides.map((_, k) => {
+    const raw = new Float32Array(n), out = new Float32Array(n);
+    for (let f = 0; f < n; f++) {
+      const y = low[k]![f]! + pelvis[f]!, e = planted[k]![f]!;
+      raw[f] = e * -y + (1 - e) * Math.max(0, SWING_CLEAR - y);
+    }
+    for (let f = 0; f < n; f++) out[f] = (raw[(f + n - 1) % n]! + 2 * raw[f]! + raw[(f + 1) % n]!) / 4;
+    return out;
+  }) as [Float32Array, Float32Array];
+  return { pelvis, lift };
 }
 
 function gaitTime(c: RigClip, phase: number): number {

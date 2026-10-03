@@ -25,7 +25,9 @@ export interface MoveIntent {
 const HALF_H = 0.55;
 const RADIUS = 0.3;
 const CENTER_Y = HALF_H + RADIUS; // capsule center above feet
-const WALK = 1.75;
+const WALK = 1.4;
+/** Stick deflection that switches walk → run (and back, with hysteresis); no slow-jog band in between. */
+const RUN_ON = 0.68, RUN_OFF = 0.58;
 const RUN = 4.6;
 const SPRINT = 7.2;
 const SWIM = 1.9;
@@ -77,6 +79,8 @@ export class Player {
   onLanded: ((fallHeight: number) => void) | null = null;
   /** Sprinting this step (for noise/stamina UI). */
   sprinting = false;
+  /** Partial stick = calm walk, full stick = run (two distinct gaits, not a speed ramp). */
+  private running = false;
   speedScale = 1;
 
   constructor(private physics: Physics, private chars: CharacterRenderer, x: number, y: number, z: number) {
@@ -165,7 +169,9 @@ export class Player {
     } else {
       this.sprinting = intent.sprint && mag > 0.3 && !this.crouching && intent.faceYaw === null && this.vitals.stamina > 0;
       if (this.sprinting) this.vitals.useStamina(13 * dt);
-      const base = this.crouching ? WALK * 0.9 : intent.faceYaw !== null ? RUN * 0.62 : mag < 0.55 ? lerp(0, WALK, mag / 0.55) : lerp(WALK, RUN, (mag - 0.55) / 0.45);
+      this.running = mag > (this.running ? RUN_OFF : RUN_ON);
+      const walk = WALK * Math.min(1, mag / 0.3);
+      const base = this.crouching ? WALK * 0.9 * Math.min(1, mag / 0.3) : intent.faceYaw !== null ? RUN * 0.62 : this.running ? RUN : walk;
       speed = this.sprinting ? SPRINT : base;
     }
     speed *= this.speedScale;

@@ -50,6 +50,7 @@ export class KeyboardMouse {
     const down = e.type === 'keydown';
     if (down) this.keys.add(e.code);
     else this.keys.delete(e.code);
+    if (e.code.startsWith('Alt')) e.preventDefault(); // walk modifier, not the browser menu
     const a = KEYMAP[e.code];
     if (a) {
       if (e.code === 'Tab' || e.code === 'Space') e.preventDefault();
@@ -84,7 +85,8 @@ export class KeyboardMouse {
     const x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
     const y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     if (x !== 0 || y !== 0 || this.input.lastDevice === 'keyboard') {
-      const len = Math.hypot(x, y) || 1;
+      // hold Alt to walk (half deflection = the walk gait on foot)
+      const len = (Math.hypot(x, y) || 1) * (k.has('AltLeft') || k.has('AltRight') ? 2 : 1);
       this.input.moveX = x / len;
       this.input.moveY = y / len;
     }

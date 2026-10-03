@@ -18,9 +18,9 @@ export function goFullscreen(): void {
   }
 }
 
-const CONTROLS = `<h3>Keyboard & mouse</h3><div class="muted">WASD move/drive · Mouse look · LMB attack · RMB aim · Space jump/handbrake · Shift sprint · F enter/exit vehicle · E use · R reload · Q cover · Ctrl crouch · Tab weapon wheel · T switch target · C camera · H horn · N radio · M phone · Esc pause · Enter skip dialogue</div>
+const CONTROLS = `<h3>Keyboard & mouse</h3><div class="muted">WASD move/drive · Mouse look · LMB attack · RMB aim · Space jump/handbrake · Shift sprint · Alt walk · F enter/exit vehicle · E use · R reload · Q cover · Ctrl crouch · Tab weapon wheel · T switch target · C camera · H horn · N radio · M phone · Esc pause · Enter skip dialogue</div>
 <h3>Gamepad</h3><div class="muted">LS move · RS look · RT attack/gas · LT aim/brake · A jump · B enter/exit · X use/reload · Y cover · LB weapon wheel · RB switch target · D-pad radio/horn/weapons · Back phone · Start pause</div>
-<h3>Touch</h3><div class="muted">Left half: floating joystick · Right half: drag to look, swipe to switch targets · Buttons appear when they're useful (ENTER, USE, reload…) · 📱 phone · II pause · Tilt aiming available in Settings</div>`;
+<h3>Touch</h3><div class="muted">Left half: floating joystick (push lightly to walk, fully to run, all the way up to sprint) · Right half: drag to look, swipe to switch targets · Buttons appear when they're useful (ENTER, USE, reload…) · 📱 phone · II pause · Tilt aiming available in Settings</div>`;
 
 /** Title screen (New / Continue / Load) and pause menu. */
 export class Menus {

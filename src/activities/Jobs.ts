@@ -53,7 +53,7 @@ export class TaxiJob extends Activity {
     this.earned = 0;
     this.phase = 'search';
     this.wait = 1.5;
-    g.hud.toast('On duty. Fares pay more when you beat the meter.', 3000);
+    g.hud.toast('On duty. A fare will call in shortly; beat the meter for tips.', 3000);
   }
 
   override blips(out: Blip[]): void {
@@ -82,7 +82,7 @@ export class TaxiJob extends Activity {
     this.fare = p;
     this.pickup = s;
     this.phase = 'pickup';
-    g.hud.toast('New fare — pick them up', 1800);
+    g.hud.toast('New fare! Follow the blue GPS line to them', 2600);
   }
 
   override update(dt: number): void {
@@ -113,8 +113,8 @@ export class TaxiJob extends Activity {
         const curb = this.mgr.curbside(s);
         g.gps.objective = curb;
         this.mgr.markers.beacon(curb.x, s.y - 0.1, curb.z, 3, 0x4dc3ff, 5);
-        g.hud.objectiveText('Pick up the <b>fare</b>');
         const d = Math.hypot(cp.x - s.x, cp.z - s.z);
+        g.hud.objectiveText(d > 25 ? `Pick up the waving <b>fare</b> (${Math.round(d / 10) * 10} m)` : 'Stop beside the <b>fare</b>');
         if (!this.fare?.alive) {
           this.phase = 'search';
           this.wait = 2;
@@ -171,8 +171,9 @@ export class TaxiJob extends Activity {
         this.timer += dt;
         const left = this.allowed - this.timer;
         g.hud.timerText(`${left < 0 ? '+' : ''}${Math.abs(Math.ceil(left))}s`);
-        g.hud.objectiveText(`Drive the fare to the <b>destination</b>`);
-        if (Math.hypot(cp.x - curb.x, cp.z - curb.z) < 9 && Math.abs(cab.speed) < 1.5) {
+        const dd = Math.hypot(cp.x - curb.x, cp.z - curb.z);
+        g.hud.objectiveText(dd > 25 ? `Drive the fare to the <b>destination</b> (${Math.round(dd / 10) * 10} m)` : 'Stop at the <b>destination</b>');
+        if (dd < 9 && Math.abs(cab.speed) < 1.5) {
           const dmg = Math.max(0, this.startHealth - cab.health.fraction);
           const { fare, tip } = taxiFare(this.dist, this.timer, this.allowed, dmg);
           this.streak++;

@@ -438,6 +438,8 @@ scaling (pixel ratio 0.5–1.0× adjusted by frame time), auto quality detection
   - Clothes, skin and hair are tinted per instance from paint slots baked per material. Faces get painted stubble or a goatee, and arms and neck get tattoos. Hats are fitted to each head, and held items are per-instance variants.
   - `rig/wardrobe.ts` maps the classic `Appearance` fields onto parts, so the shops, barber, police and SWAT still work.
   - `AnimGraph` maps `AnimState` to clip layers: speed-matched gait blending, full-body and upper-body cross-fades, and FK overrides for strafing twist and lean.
+  - The mocap jog and sprint have leaping strides (their feet imply about 6 and 9 m/s). Their leg swing is pulled about 30% toward each cycle's average leg pose (`STRIDE`) and the cycles are pinned to 3.9 and 6.9 m/s (`GAIT_SPEED`), so runs keep a natural cadence with planted feet.
+  - The lower-body strafe twist only applies while aiming.
   - Actions with no clip (hands up, cower, kick, lockpick, wave, bike) retarget the old procedural `Pose` onto the skeleton (`ProcPose`).
   - The ragdoll is now 11 bodies on real bones, with hinge-limited elbows and knees.
   - `__game.lineup()` shows a QA row of animated characters.

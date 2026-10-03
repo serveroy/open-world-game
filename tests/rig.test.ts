@@ -204,6 +204,19 @@ describe('animation graph', () => {
     }
   });
 
+  it('runs keep a believable cadence (steps per second)', () => {
+    for (const [speed, lo, hi] of [[4.6, 2.3, 3.3], [7.2, 2.8, 4.0]] as const) {
+      const st = makeAnimState();
+      st.speed = speed;
+      const c = run(st, 1);
+      const p0 = (c as unknown as { phase: number }).phase;
+      run(st, 2, c);
+      const steps = (((c as unknown as { phase: number }).phase - p0) / 2) * 2;
+      expect(steps).toBeGreaterThan(lo);
+      expect(steps).toBeLessThan(hi);
+    }
+  });
+
   it('procedural fallback actions evaluate to finite poses', () => {
     const st = makeAnimState();
     for (const a of ['handsup', 'cower', 'kick', 'lockpick', 'wave', 'pulled', 'vault'] as const) {

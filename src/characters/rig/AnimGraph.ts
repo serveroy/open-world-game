@@ -83,8 +83,22 @@ const PROC = -1, PISTOL = -2, SWIM = -3;
 
 /** Gait speed knots (m/s): idle→walk, walk→jog, jog→sprint blend ranges. */
 const IDLE_WALK = [0.12, 0.7];
-const WALK_JOG = [2.0, 3.6];
-const JOG_SPRINT = [5.4, 6.9];
+const WALK_JOG = [2.2, 3.0];
+const JOG_SPRINT = [5.6, 6.6];
+/**
+ * Ground speed (m/s) each run cycle is played at, at rate 1. The mocap jog and sprint have stylised
+ * strides (their planted feet imply ~5.9 and ~8.9 m/s), so matching feet exactly at gameplay speeds
+ * would slow them to a floaty slow-motion bound. Cadence reads as "running" far more than a little
+ * foot slip does, so they are pinned to believable speeds instead. Walks keep their measured speed.
+ */
+export const GAIT_SPEED: Record<string, number> = { Jog_Fwd_Loop: 3.9, Sprint_Loop: 6.9 };
+const gaitSpeed = (c: RigClip): number => GAIT_SPEED[c.name] ?? c.speed;
+/**
+ * Stride shortening: the mocap runs swing the legs almost into the splits. Their leg rotations are
+ * pulled this far toward the cycle's average leg pose, which shortens the stride to suit the speeds
+ * above (the planted foot then roughly matches the ground again).
+ */
+const STRIDE: Record<string, number> = { Jog_Fwd_Loop: 0.36, Sprint_Loop: 0.26 };
 
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -96,6 +110,9 @@ export class AnimLibrary {
   readonly masks: Float32Array[];
   readonly proc: ProcRetarget;
   readonly c: Record<string, number> = {};
+  /** Leg bones and each run cycle's average leg pose (see STRIDE). */
+  readonly legBones: number[];
+  readonly legMean = new Map<string, Float32Array>();
   /** Model-space +Z (forward) and +Y (up) expressed in the root bone's local frame (pelvis offsets). */
   readonly fwd = new Float32Array(3);
   readonly up = new Float32Array(3);
@@ -121,6 +138,27 @@ export class AnimLibrary {
     });
     this.masks = [full, upper, rarm, arms];
     this.proc = new ProcRetarget(rig);
+    // per-run-cycle average leg pose (stride shortening target)
+    const legs = rig.boneNames.map((n, i) => (/^(thigh|calf|foot|ball)_/.test(n) ? i : -1)).filter((i) => i >= 0);
+    this.legBones = legs;
+    for (const name of Object.keys(STRIDE)) {
+      const ci = rig.clipIndex.get(name);
+      if (ci === undefined) continue;
+      const c = rig.clips[ci]!, nb = rig.boneNames.length;
+      const mean = new Float32Array(nb * 4);
+      for (const b of legs) {
+        let x = 0, y = 0, z = 0, w = 0;
+        const r0 = c.rot.subarray(b * 4, b * 4 + 4);
+        for (let f = 0; f < c.frames; f++) {
+          const o = (f * nb + b) * 4;
+          const sg = c.rot[o]! * r0[0]! + c.rot[o + 1]! * r0[1]! + c.rot[o + 2]! * r0[2]! + c.rot[o + 3]! * r0[3]! < 0 ? -1 : 1;
+          x += c.rot[o]! * sg; y += c.rot[o + 1]! * sg; z += c.rot[o + 2]! * sg; w += c.rot[o + 3]! * sg;
+        }
+        const l = Math.hypot(x, y, z, w) || 1;
+        mean.set([x / l, y / l, z / l, w / l], b * 4);
+      }
+      this.legMean.set(name, mean);
+    }
     rig.clips.forEach((cl, i) => (this.c[cl.name] = i));
   }
   clip(name: string): RigClip {
@@ -207,11 +245,14 @@ export class AnimController {
     const walk = lib.clip(this.walkClip()), jog = lib.clip('Jog_Fwd_Loop'), sprint = lib.clip('Sprint_Loop');
     const mv = g[1]! + g[2]! + g[3]!;
     if (mv > 1e-3) {
-      const v = ((g[1]! * walk.speed + g[2]! * jog.speed + g[3]! * sprint.speed) / mv) * this.legScale;
+      const v = ((g[1]! * gaitSpeed(walk) + g[2]! * gaitSpeed(jog) + g[3]! * gaitSpeed(sprint)) / mv) * this.legScale;
       const f = (g[1]! / walk.duration + g[2]! / jog.duration + g[3]! / sprint.duration) / mv;
-      // exact ground-speed match, softened in the slow-walk range (very quick shuffles look odd)
+      // ground-speed match, softened in the slow-walk range (very quick shuffles look odd); runs never
+      // drop into slow motion
       let r = Math.max(0.05, sp) / v;
-      if (r > 1) r = Math.pow(r, g[2]! + g[3]! > 0.5 ? 1 : 0.8);
+      const running = g[2]! + g[3]! > 0.5;
+      if (r > 1 && !running) r = Math.pow(r, 0.8);
+      if (running) r = Math.min(1.35, Math.max(0.92, r));
       this.rate = f * r;
     } else this.rate = 1 / walk.duration;
     // strafing / backpedalling: lower body follows the move direction, upper body keeps facing
@@ -394,6 +435,24 @@ export class AnimController {
       if (w <= 0.001) continue;
       acc += w;
       blendClip(rig, c, gaitTime(c, this.phase), w / acc, out);
+    }
+    // shorten the run strides (weighted by how much of the pose is a run)
+    for (const [w, c] of gaits) {
+      const k = STRIDE[c.name];
+      const mean = k ? lib.legMean.get(c.name) : undefined;
+      if (!mean || w <= 0.001) continue;
+      const a = (k! * w) / Math.max(acc, 1e-3);
+      const q = out.q;
+      for (const b of lib.legBones) {
+        const j = b * 4;
+        let mx = mean[j]!, my = mean[j + 1]!, mz = mean[j + 2]!, mw = mean[j + 3]!;
+        if (q[j]! * mx + q[j + 1]! * my + q[j + 2]! * mz + q[j + 3]! * mw < 0) {
+          mx = -mx; my = -my; mz = -mz; mw = -mw;
+        }
+        const x = q[j]! + (mx - q[j]!) * a, y = q[j + 1]! + (my - q[j + 1]!) * a, z = q[j + 2]! + (mz - q[j + 2]!) * a, ww = q[j + 3]! + (mw - q[j + 3]!) * a;
+        const l = 1 / Math.sqrt(x * x + y * y + z * z + ww * ww);
+        q[j] = x * l; q[j + 1] = y * l; q[j + 2] = z * l; q[j + 3] = ww * l;
+      }
     }
     if (s.crouch > 0.01) {
       const ci = lib.clip('Crouch_Idle_Loop'), cf = lib.clip('Crouch_Fwd_Loop');

@@ -361,7 +361,8 @@ export class Player {
     this.lastYaw = this.yaw;
     a.lean = clamp(-turn * 0.03 * Math.min(1, hs / 5), -0.25, 0.25);
     // direction of travel relative to facing (strafing / backpedalling while aiming)
-    a.moveYaw = hs > 0.3 ? angleDiff(this.yaw, Math.atan2(this.vel.x, this.vel.z)) : 0;
+    // (only while aiming: otherwise the body turns toward the stick and the lag is just a turn)
+    a.moveYaw = hs > 0.3 && aimStyle !== 'none' ? angleDiff(this.yaw, Math.atan2(this.vel.x, this.vel.z)) : 0;
     advancePhase(a, dt);
     computePose(this.targetPose, a);
     blendPose(this.pose, this.targetPose, dampFactor(a.action !== 'none' ? 30 : 16, dt));

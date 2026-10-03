@@ -78,6 +78,16 @@ export class Renderer {
   private scale = 1;
   private frameAvg = 16.7;
   private adjustTimer = 0;
+  private winMs = 0;
+  private winFrames = 0;
+  /** Last resolution drop, checked one window later: did it actually speed frames up? */
+  private trial: { from: number; before: number } | null = null;
+  private holdT = 0;
+  /**
+   * True when lowering the resolution did not raise the frame rate: the browser itself is pacing
+   * frames (e.g. iOS Low Power Mode or a throttled web view caps pages at 30 Hz).
+   */
+  browserCapped = false;
   /** Optional post-processing hook (set by PostFX). */
   postRender: ((dt: number) => boolean) | null = null;
   onResize: ((w: number, h: number) => void)[] = [];
@@ -138,16 +148,37 @@ export class Renderer {
   /** Feed frame time (ms); adjusts resolution scale to hold target FPS. */
   trackFrame(ms: number): void {
     this.frameAvg += (ms - this.frameAvg) * 0.05;
+    this.holdT = Math.max(0, this.holdT - ms);
     if (!this.settings.data.dynamicResolution) return;
+    this.winMs += ms;
+    this.winFrames++;
     this.adjustTimer += ms;
-    if (this.adjustTimer < 1000) return;
-    this.adjustTimer = 0;
+    if (this.adjustTimer < 1500) return;
+    const avg = this.winMs / Math.max(1, this.winFrames);
+    this.adjustTimer = this.winMs = this.winFrames = 0;
     const target = this.settings.data.fpsCap === 30 ? 33.4 : 16.9;
     const r = renderPixelRatio(devicePixelRatio, innerWidth, innerHeight, this.preset, 1);
     const minScale = r.min / r.max;
     let next = this.scale;
-    if (this.frameAvg > target * 1.18) next = Math.max(minScale, this.scale - 0.1);
-    else if (this.frameAvg < target * 0.85) next = Math.min(1, this.scale + 0.05);
+    if (this.trial) {
+      // a drop that bought less than ~7% is not GPU load: the browser paces the frames, so
+      // restore the sharper image and stop trying for a while
+      const t = this.trial;
+      this.trial = null;
+      if (avg > t.before * 0.93) {
+        next = t.from;
+        this.browserCapped = true;
+        this.holdT = 30000;
+      }
+    } else if (avg > target * 1.18) {
+      if (this.holdT <= 0 && this.scale > minScale + 0.001) {
+        this.trial = { from: this.scale, before: avg };
+        next = Math.max(minScale, this.scale - 0.1);
+      }
+    } else if (avg < target * 0.85) {
+      next = Math.min(1, this.scale + 0.05);
+      this.browserCapped = false;
+    }
     if (Math.abs(next - this.scale) > 0.001) {
       this.scale = next;
       this.resize();

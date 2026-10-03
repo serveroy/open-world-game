@@ -550,7 +550,8 @@ export class Game {
   debugText(): string {
     const info = this.renderer.gl.info;
     const p = this.player.pos;
-    return `FPS ${this.fps.toFixed(0)}  ${this.quality.toUpperCase()}  res×${this.renderer.resolutionScale.toFixed(2)} pr ${this.renderer.pixelRatio.toFixed(2)}\n` +
+    const cap = this.renderer.browserCapped ? ' (browser-capped: Low Power Mode?)' : '';
+    return `FPS ${this.fps.toFixed(0)}${cap}  ${this.quality.toUpperCase()}  res×${this.renderer.resolutionScale.toFixed(2)} pr ${this.renderer.pixelRatio.toFixed(2)}\n` +
       `draws ${info.render.calls}  tris ${(info.render.triangles / 1000).toFixed(0)}k  geo ${info.memory.geometries} tex ${info.memory.textures}\n` +
       `pos ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}  ${this.player.mode}${this.player.swimming ? ' swim' : ''}${this.player.grounded ? ' gnd' : ''}\n` +
       `chunks ${this.world?.chunkCount ?? 0}  ${this.env ? this.env.clock.text() + ' ' + this.env.weather.target : ''}`;
